@@ -211,6 +211,12 @@ const env = import.meta.env
             </el-icon>
             AI助手
           </el-menu-item>
+          <el-menu-item index="/publish">
+            <el-icon>
+              <Edit/>
+            </el-icon>
+            发布文章
+          </el-menu-item>
           <!-- <el-menu-item index="/about">
             <el-icon>
               <UserFilled/>

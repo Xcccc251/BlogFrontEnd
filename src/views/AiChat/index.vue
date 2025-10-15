@@ -1,20 +1,28 @@
 <template>
   <div class="ai-chat-container">
     <!-- 侧边栏 -->
-    <div class="chat-sidebar" :class="{ 'sidebar-collapsed': sidebarCollapsed }">
+    <div 
+      class="chat-sidebar" 
+      :class="{ 
+        'sidebar-collapsed': sidebarCollapsed,
+        'sidebar-hovered': sidebarHovered
+      }"
+      @mouseenter="handleSidebarMouseEnter"
+      @mouseleave="handleSidebarMouseLeave"
+    >
       <div class="sidebar-header">
         <div class="header-content">
-          <h3>AI助手</h3>
+          <h3 v-if="!sidebarCollapsed || sidebarHovered"></h3>
           <button class="collapse-btn" @click="toggleSidebar">
             <i :class="sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
           </button>
         </div>
-        <button class="new-chat-btn" @click="createNewSession" v-if="!sidebarCollapsed">
-          <i class="fas fa-plus"></i> 新聊天
+        <button class="new-chat-btn" @click="createNewSession" v-if="!sidebarCollapsed || sidebarHovered">
+          <i class="fas fa-edit"></i> 发起新对话
         </button>
       </div>
       
-      <div class="session-list" v-if="!sidebarCollapsed">
+      <div class="session-list" v-if="!sidebarCollapsed || sidebarHovered">
         <div v-if="!sessions || sessions.length === 0" class="empty-sessions">
           <i class="fas fa-comments"></i>
           <p>暂无对话记录</p>
@@ -65,7 +73,7 @@
 
       <div class="chat-messages" ref="chatMessages">
         <div v-if="messages.length === 0" class="welcome-message">
-          <br><br><br><br><br><br><br><br>
+          <br>
           <h3>有什么可以帮忙的？</h3>
         </div>
         
@@ -76,8 +84,23 @@
           :class="[`${message.role}-message`, getMessageTypeClass(message.messageType)]"
         >
           <div class="message-content">
+            <!-- 如果是图片生成工具结果，显示图片 -->
+            <div v-if="message.messageType === 'image_result'" class="image-container">
+              <div class="image-header">
+                <h4>生成的图片</h4>
+              </div>
+              <div class="generated-image">
+                <img 
+                  :src="message.content" 
+                  :alt="'生成的图片'"
+                  @error="handleGeneratedImageError($event)"
+                  @load="handleGeneratedImageLoad"
+                  @click="openImageInNewTab(message.content)"
+                />
+              </div>
+            </div>
             <!-- 如果是工具结果消息且有文章数据，显示文章卡片 -->
-            <div v-if="message.messageType === 'tool_result' && message.articles && message.articles.length > 0" class="articles-container">
+            <div v-else-if="message.messageType === 'tool_result' && message.articles && message.articles.length > 0" class="articles-container">
               <div class="articles-header">
                 <h4>{{ getArticleHeader(message.content) }}</h4>
               </div>
@@ -195,6 +218,8 @@ interface ChatMessage {
   bubbleId?: string
   messageType?: string
   articles?: ArticleInfo[]
+  name?: string
+  tool_call_id?: string
 }
 
 interface ArticleInfo {
@@ -214,7 +239,9 @@ const loading = ref(false)
 const isTyping = ref(false)
 const showDeleteDialog = ref(false)
 const deleteSessionId = ref<string | null>(null)
-const sidebarCollapsed = ref(false)
+const sidebarCollapsed = ref(true)
+const sidebarHovered = ref(false)
+let hoverTimeout: number | null = null
 
 // DOM引用
 const chatMessages = ref<HTMLElement | null>(null)
@@ -330,8 +357,13 @@ const renderChatHistory = (history: any[]) => {
       
       // 检查是否为工具消息 - 支持多种可能的role值和内容特征
       if (message.role === 'tool') {
-        // 工具消息使用绿色样式
-        messageType = 'tool_result'
+        // 检查是否为图片生成工具
+        if (message.name === 'generate_image') {
+          messageType = 'image_result'
+        } else {
+          // 其他工具消息使用绿色样式
+          messageType = 'tool_result'
+        }
       } else if (message.role === 'assistant' && message.content.includes('🔍 正在使用工具:')) {
         // 工具开始消息
         messageType = 'tool_start'
@@ -406,6 +438,8 @@ const sendStreamMessage = async (message: string) => {
   
   // 用于跟踪不同气泡的内容
   const bubbleContents = new Map<string, string>()
+  // 用于跟踪不同气泡的工具信息
+  const bubbleTools = new Map<string, string>()
   
   try {
     while (true) {
@@ -436,6 +470,7 @@ const sendStreamMessage = async (message: string) => {
               // 工具开始，创建新的气泡
               const bubbleId = parsed.bubble_id
               bubbleContents.set(bubbleId, '')
+              bubbleTools.set(bubbleId, parsed.tool_name) // 保存工具名称
               
               messages.value.push({
                 role: 'assistant',
@@ -450,29 +485,45 @@ const sendStreamMessage = async (message: string) => {
                 bubbleContents.set(bubbleId, bubbleContents.get(bubbleId)! + parsed.content)
                 
                 // 找到对应的消息并更新
-                const messageIndex = messages.value.findIndex(msg => msg.bubbleId === bubbleId)
+                const messageIndex = messages.value.findIndex((msg: ChatMessage) => msg.bubbleId === bubbleId)
                 if (messageIndex !== -1) {
                   const content = bubbleContents.get(bubbleId)!
                   messages.value[messageIndex].content = content
-                  messages.value[messageIndex].messageType = 'tool_result'
                   
-                  // 解析文章数据
-                  if (content.includes('找到') && content.includes('篇相关文章') && content.includes('<a href=')) {
-                    messages.value[messageIndex].articles = parseArticles(content)
+                  // 检查是否为图片生成工具
+                  const toolName = bubbleTools.get(bubbleId)
+                  if (toolName === 'generate_image') {
+                    messages.value[messageIndex].messageType = 'image_result'
+                    messages.value[messageIndex].name = toolName
+                    messages.value[messageIndex].tool_call_id = parsed.tool_call_id
+                  } else {
+                    messages.value[messageIndex].messageType = 'tool_result'
+                    
+                    // 解析文章数据
+                    if (content.includes('找到') && content.includes('篇相关文章') && content.includes('<a href=')) {
+                      messages.value[messageIndex].articles = parseArticles(content)
+                    }
                   }
                 }
               }
             } else if (parsed.type === 'tool_end') {
               // 工具结束，保持tool_result类型以维持卡片显示
               const bubbleId = parsed.bubble_id
-              const messageIndex = messages.value.findIndex(msg => msg.bubbleId === bubbleId)
+              const messageIndex = messages.value.findIndex((msg: ChatMessage) => msg.bubbleId === bubbleId)
               if (messageIndex !== -1) {
                 // 保持tool_result类型，不改为tool_complete，以维持文章卡片的显示
                 // messages.value[messageIndex].messageType = 'tool_complete'
                 
                 // 流式输出完成后，强制重新渲染图片
                 nextTick(() => {
-                  refreshArticleImages(messageIndex)
+                  const toolName = bubbleTools.get(bubbleId)
+                  if (toolName === 'generate_image') {
+                    // 对于图片生成工具，强制重新渲染图片
+                    refreshGeneratedImage(messageIndex)
+                  } else {
+                    // 对于其他工具，刷新文章图片
+                    refreshArticleImages(messageIndex)
+                  }
                 })
               }
             } else if (parsed.type === 'content') {
@@ -491,7 +542,7 @@ const sendStreamMessage = async (message: string) => {
               bubbleContents.set(bubbleId, bubbleContents.get(bubbleId)! + parsed.content)
               
               // 找到对应的消息并更新
-              const messageIndex = messages.value.findIndex(msg => msg.bubbleId === bubbleId)
+              const messageIndex = messages.value.findIndex((msg: ChatMessage) => msg.bubbleId === bubbleId)
               if (messageIndex !== -1) {
                 messages.value[messageIndex].content = bubbleContents.get(bubbleId)!
               }
@@ -544,7 +595,7 @@ const sendStreamMessage = async (message: string) => {
               }
               
               bubbleContents.set(bubbleId, bubbleContents.get(bubbleId)! + parsed.content)
-              const messageIndex = messages.value.findIndex(msg => msg.bubbleId === bubbleId)
+              const messageIndex = messages.value.findIndex((msg: ChatMessage) => msg.bubbleId === bubbleId)
               if (messageIndex !== -1) {
                 messages.value[messageIndex].content = bubbleContents.get(bubbleId)!
               }
@@ -589,6 +640,28 @@ const confirmDelete = () => {
 // 切换侧边栏
 const toggleSidebar = () => {
   sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// 处理侧边栏鼠标悬浮
+const handleSidebarMouseEnter = () => {
+  if (sidebarCollapsed.value) {
+    // 清除之前的延迟
+    if (hoverTimeout) {
+      clearTimeout(hoverTimeout)
+      hoverTimeout = null
+    }
+    sidebarHovered.value = true
+  }
+}
+
+// 处理侧边栏鼠标离开
+const handleSidebarMouseLeave = () => {
+  if (sidebarCollapsed.value) {
+    // 添加延迟，避免快速切换
+    hoverTimeout = setTimeout(() => {
+      sidebarHovered.value = false
+    }, 100)
+  }
 }
 
 // 发送消息处理
@@ -719,6 +792,8 @@ const getMessageTypeClass = (messageType?: string) => {
       return 'tool-start-message'
     case 'tool_result':
       return 'tool-result-message'
+    case 'image_result':
+      return 'image-result-message'
     case 'tool_complete':
       return 'tool-complete-message'
     case 'content':
@@ -828,6 +903,55 @@ const refreshArticleImages = (messageIndex: number) => {
     })
   }
 }
+
+// 刷新生成的图片
+const refreshGeneratedImage = (messageIndex: number) => {
+  const message = messages.value[messageIndex]
+  if (message && message.messageType === 'image_result') {
+    // 强制重新渲染图片内容，触发图片重新加载
+    const content = message.content
+    message.content = ''
+    nextTick(() => {
+      message.content = content
+    })
+  }
+}
+
+// 处理生成图片加载错误
+const handleGeneratedImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  console.log('生成图片加载失败:', img.src)
+  
+  // 显示占位符
+  img.style.display = 'none'
+  const placeholder = document.createElement('div')
+  placeholder.className = 'image-placeholder'
+  placeholder.innerHTML = '<i class="fas fa-image"></i><p>图片加载失败</p>'
+  placeholder.style.cssText = `
+    width: 100%;
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #f5f5f5;
+    color: #ccc;
+    font-size: 24px;
+    border-radius: 8px;
+  `
+  img.parentNode?.insertBefore(placeholder, img)
+}
+
+// 处理生成图片加载成功
+const handleGeneratedImageLoad = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  console.log('生成图片加载成功:', img.src)
+}
+
+// 在新标签页中打开图片
+const openImageInNewTab = (imageUrl: string) => {
+  window.open(imageUrl, '_blank')
+}
 </script>
 
 <style scoped lang="scss">
@@ -842,23 +966,39 @@ const refreshArticleImages = (messageIndex: number) => {
 /* 侧边栏样式 */
 .chat-sidebar {
   width: 260px;
-  background: #ffffff;
+  background: #f0f4fa;
   color: #333333;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid #e5e5e5;
   transition: width 0.3s ease;
   position: relative;
-  z-index: 1;
+  z-index: 10;
+  pointer-events: auto;
   
   &.sidebar-collapsed {
     width: 60px;
+    
+    &.sidebar-hovered {
+      width: 260px;
+      box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
+      z-index: 50;
+      position: relative;
+      overflow: visible;
+    }
   }
 }
 
 .sidebar-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e5e5;
+  background: #f0f4fa;
+  
+  .sidebar-collapsed:not(.sidebar-hovered) & {
+    padding: 16px 10px;
+  }
+  
+  .sidebar-collapsed.sidebar-hovered & {
+    padding: 16px 20px;
+  }
 }
 
 .header-content {
@@ -866,11 +1006,19 @@ const refreshArticleImages = (messageIndex: number) => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 15px;
+  
+  .sidebar-collapsed:not(.sidebar-hovered) & {
+    justify-content: center;
+  }
+  
+  .sidebar-collapsed.sidebar-hovered & {
+    justify-content: space-between;
+  }
 }
 
 .sidebar-header h3 {
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: normal;
   color: #333333;
   display: flex;
   align-items: center;
@@ -892,29 +1040,36 @@ const refreshArticleImages = (messageIndex: number) => {
   transition: background 0.2s ease;
   
   &:hover {
-    background: #f5f5f5;
+    background: #e8e8e8;
   }
 }
 
 .new-chat-btn {
   width: 100%;
-  padding: 10px 16px;
-  background: #ffffff;
-  color: #333333;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  padding: 12px 20px;
+  background: #f5f5f5;
+  color: #666666;
+  border: none;
+  border-radius: 20px;
   font-size: 0.9rem;
   font-weight: 500;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 10px;
   transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   
   &:hover {
-    background: #f8f9fa;
-    border-color: #d1d5db;
+    background: #e8e8e8;
+    color: #333333;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  }
+  
+  i {
+    font-size: 1rem;
   }
 }
 
@@ -922,6 +1077,14 @@ const refreshArticleImages = (messageIndex: number) => {
   flex: 1;
   overflow-y: auto;
   padding: 10px;
+  
+  /* 隐藏滚动条 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  
+  &::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
+  }
 }
 
 .session-item {
@@ -934,12 +1097,13 @@ const refreshArticleImages = (messageIndex: number) => {
   transition: all 0.2s ease;
   position: relative;
   
+  
   &:hover {
-    background: #f5f5f5;
+    background: #f0f4fa;
   }
   
   &.active {
-    background: #f0f0f0;
+    background: #f0f4fa;
   }
 }
 
@@ -1034,7 +1198,6 @@ const refreshArticleImages = (messageIndex: number) => {
 
 .chat-header {
   padding: 16px 20px;
-  border-bottom: 1px solid #e5e5e5;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1043,7 +1206,7 @@ const refreshArticleImages = (messageIndex: number) => {
 
 .chat-title h3 {
   font-size: 1.2rem;
-  font-weight: 600;
+  font-weight: normal;
   color: #333333;
   margin-bottom: 4px;
 }
@@ -1195,6 +1358,18 @@ const refreshArticleImages = (messageIndex: number) => {
   box-shadow: 0 2px 8px rgba(34, 197, 94, 0.1);
 }
 
+.image-result-message .message-content {
+  background: #f0f9ff;
+  border: 1px solid #0ea5e9;
+  color: #0c4a6e;
+  border-radius: 12px;
+  font-family: inherit;
+  font-size: 1em;
+  line-height: 1.6;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(14, 165, 233, 0.1);
+}
+
 .tool-complete-message .message-content {
   background: #f0f9ff;
   border: 1px solid #0ea5e9;
@@ -1333,6 +1508,50 @@ const refreshArticleImages = (messageIndex: number) => {
   overflow: visible !important;
 }
 
+/* 图片容器样式 */
+.image-container {
+  width: 100%;
+  max-width: 100%;
+}
+
+.image-header {
+  margin-bottom: 16px;
+  text-align: center;
+}
+
+.image-header h4 {
+  color: #0c4a6e;
+  font-size: 1.1rem;
+  font-weight: normal;
+  margin: 0;
+  padding: 8px 16px;
+  background: rgba(14, 165, 233, 0.1);
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.generated-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.generated-image img {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  object-fit: contain;
+}
+
+.generated-image img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
 /* 文章卡片容器样式 */
 .articles-container {
   width: 100%;
@@ -1347,7 +1566,7 @@ const refreshArticleImages = (messageIndex: number) => {
 .articles-header h4 {
   color: #14532d;
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: normal;
   margin: 0;
   padding: 8px 16px;
   background: rgba(34, 197, 94, 0.1);
@@ -1376,6 +1595,7 @@ const refreshArticleImages = (messageIndex: number) => {
   position: relative;
   min-width: 200px;
   flex-shrink: 0;
+  z-index: 1;
 }
 
 .article-card:hover {
@@ -1421,7 +1641,7 @@ const refreshArticleImages = (messageIndex: number) => {
 
 .article-title {
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: normal;
   color: #1f2937;
   margin: 0 0 8px 0;
   line-height: 1.3;
@@ -1455,7 +1675,7 @@ const refreshArticleImages = (messageIndex: number) => {
   font-weight: 500;
 }
 
-/* 响应式设计 - 文章卡片 */
+/* 响应式设计 - 文章卡片和图片 */
 @media (max-width: 768px) {
   .articles-grid {
     gap: 8px;
@@ -1476,6 +1696,15 @@ const refreshArticleImages = (messageIndex: number) => {
   
   .article-title {
     font-size: 0.8rem;
+  }
+  
+  .generated-image img {
+    max-height: 250px;
+  }
+  
+  .image-header h4 {
+    font-size: 1rem;
+    padding: 6px 12px;
   }
 }
 
@@ -1499,7 +1728,7 @@ const refreshArticleImages = (messageIndex: number) => {
 
 .tool-result-message .message-content th {
   background: rgba(14, 165, 233, 0.1);
-  font-weight: 600;
+  font-weight: normal;
   color: #0c4a6e;
 }
 

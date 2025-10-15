@@ -99,6 +99,7 @@ const env = import.meta.env
       </el-icon>
       AI对话
     </el-menu-item>
+    
     <el-menu-item index="/about" @click="isClose">
       <el-icon>
         <UserFilled/>

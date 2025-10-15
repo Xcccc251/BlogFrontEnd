@@ -108,6 +108,16 @@ export const constantRouter = [
                 meta: {
                     title: '关于网站',
                 }
+            },
+            // 发布文章
+            {
+                path: '/publish',
+                component: () => import('@/views/Publish/index.vue'),
+                name: 'publish',
+                meta: {
+                    title: '发布文章',
+                    requireAuth: true
+                }
             }
         ]
     },
