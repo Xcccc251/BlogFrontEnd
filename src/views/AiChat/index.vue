@@ -11,20 +11,26 @@
       @mouseleave="handleSidebarMouseLeave"
     >
       <div class="sidebar-header">
+        <br></br>
         <div class="header-content">
           <h3 v-if="!sidebarCollapsed || sidebarHovered"></h3>
           <button class="collapse-btn" @click="toggleSidebar">
-            <i :class="sidebarCollapsed ? 'fas fa-chevron-right' : 'fas fa-chevron-left'"></i>
+            <el-icon>
+              <ArrowRight v-if="sidebarCollapsed" />
+              <ArrowLeft v-else />
+            </el-icon>
           </button>
         </div>
         <button class="new-chat-btn" @click="createNewSession" v-if="!sidebarCollapsed || sidebarHovered">
-          <i class="fas fa-edit"></i> 发起新对话
+          <el-icon><Edit /></el-icon> 发起新对话
         </button>
       </div>
       
       <div class="session-list" v-if="!sidebarCollapsed || sidebarHovered">
         <div v-if="!sessions || sessions.length === 0" class="empty-sessions">
-          <i class="fas fa-comments"></i>
+          <el-icon style="font-size: 2.5rem; margin-bottom: 15px; display: block; color: #cccccc;">
+            <ChatLineSquare />
+          </el-icon>
           <p>暂无对话记录</p>
           <p>点击"新聊天"开始聊天</p>
         </div>
@@ -48,7 +54,7 @@
               @click="showDeleteModal(session.id)" 
               title="删除对话"
             >
-              <i class="fas fa-trash"></i>
+              <el-icon><Delete /></el-icon>
             </button>
           </div>
         </div>
@@ -57,6 +63,7 @@
 
     <!-- 主聊天区域 -->
     <div class="main-chat-area">
+      <br></br>
       <div class="chat-header">
         <div class="chat-title">
           <h3>{{ currentSessionName }}</h3>
@@ -66,14 +73,14 @@
         </div>
         <div class="chat-actions">
           <button class="action-btn" @click="clearCurrentSession">
-            <i class="fas fa-trash"></i> 清空对话
+            <el-icon><Delete /></el-icon> 清空对话
           </button>
         </div>
       </div>
 
       <div class="chat-messages" ref="chatMessages">
         <div v-if="messages.length === 0" class="welcome-message">
-          <br>
+          <br><br><br><br>
           <h3>有什么可以帮忙的？</h3>
         </div>
         
@@ -134,10 +141,10 @@
             <div v-else v-html="formatMessage(message.content)"></div>
           </div>
           <div v-if="message.messageType === 'tool_start'" class="message-indicator">
-            <i class="fas fa-spinner fa-spin"></i>
+            <el-icon class="is-loading"><Loading /></el-icon>
           </div>
           <div v-else-if="message.messageType === 'tool_complete'" class="message-indicator">
-            <i class="fas fa-check-circle"></i>
+            <el-icon><Check /></el-icon>
           </div>
         </div>
       </div>
@@ -158,14 +165,14 @@
             @click="handleSendMessage"
             :disabled="!inputMessage.trim() || isTyping"
           >
-            <i class="fas fa-paper-plane"></i>
+            <el-icon><Promotion /></el-icon>
           </button>
         </div>
         <div class="input-footer">
           <span class="typing-indicator" v-if="isTyping">
-            <i class="fas fa-circle"></i>
-            <i class="fas fa-circle"></i>
-            <i class="fas fa-circle"></i>
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
             AI正在回答...
           </span>
         </div>
@@ -191,7 +198,9 @@
     <!-- 加载提示 -->
     <div v-if="loading" class="loading-overlay">
       <div class="loading-spinner">
-        <i class="fas fa-spinner fa-spin"></i>
+        <el-icon class="is-loading" style="font-size: 2rem; color: #007bff; margin-bottom: 15px;">
+          <Loading />
+        </el-icon>
         <p>加载中...</p>
       </div>
     </div>
@@ -201,6 +210,7 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Delete, Edit, Promotion, ArrowLeft, ArrowRight, Check, Loading, ChatLineSquare } from '@element-plus/icons-vue'
 import { sessionAPI, chatAPI } from '@/apis/aiChat'
 
 // 类型定义
@@ -960,7 +970,7 @@ const openImageInNewTab = (imageUrl: string) => {
   height: calc(100vh + 45px);
   background: #ffffff;
   margin-top: -45px;
-  padding-top: 90px;
+  padding-top: 45px;
 }
 
 /* 侧边栏样式 */
@@ -974,6 +984,7 @@ const openImageInNewTab = (imageUrl: string) => {
   position: relative;
   z-index: 10;
   pointer-events: auto;
+  height: 100%;
   
   &.sidebar-collapsed {
     width: 60px;
@@ -1837,7 +1848,11 @@ const openImageInNewTab = (imageUrl: string) => {
   color: #666666;
   font-size: 0.9rem;
   
-  i {
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background-color: #666666;
     animation: typing 1.4s infinite;
     
     &:nth-child(2) {

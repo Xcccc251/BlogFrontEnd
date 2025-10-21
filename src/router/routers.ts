@@ -173,6 +173,15 @@ export const constantRouter = [
             title: '用户设置',
         }
     },
+    // Monaco Editor Diff 测试页面
+    {
+        path: '/test',
+        component: () => import('@/views/Test/index.vue'),
+        name: 'test',
+        meta: {
+            title: 'Monaco Editor 测试',
+        }
+    },
     // 访问其他任何不存在的路由，重定向到首页
     {
         path: '/:pathMatch(.*)*',

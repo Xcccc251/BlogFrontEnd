@@ -46,7 +46,60 @@ export const chatAPI = {
         session_id: sessionId
       })
     })
-  }
+  },
 }
+
+export const agentAPI = {
+  // 发送消息（流式响应）
+  sendMessage(articleMessage:string, userMessage: string, sessionId: string | null, type: string) {
+    return fetch('/api/agent/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        article_message:articleMessage,
+        user_message: userMessage,
+        type: type,
+        session_id: sessionId
+      })
+    })
+  },  
+  
+  createAgentSession() {
+    return api.post('/agent/sessions')
+  },
+
+  // 获取所有会话
+  getAgentSessions() {
+    return api.get('/agent/sessions')
+  },
+    
+    // 加载指定会话
+  loadAgentSession(sessionId: string) {
+    return api.get(`/agent/sessions/${sessionId}`)
+  },
+    
+    // 删除会话
+  deleteAgentSession(sessionId: string) {
+    return api.delete(`/agent/sessions/${sessionId}`)
+  },
+
+  getArticle(articleId: string) {
+    return api.get(`/agent/article/${articleId}`)
+  },
+
+  saveArticle(sessionId: string, articleContent: string, articleTitle: string, articleCover: string, articleCategory: string, articleTagArray: string[]) {
+    return api.post(`/agent/save/article`, {
+      session_id: sessionId,
+      article_content: articleContent,
+      article_title: articleTitle,
+      article_cover: articleCover,
+      article_category: articleCategory,
+      article_tags: JSON.stringify(articleTagArray)
+    })
+  },
+}
+
 
 export default api

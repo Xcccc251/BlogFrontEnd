@@ -22,6 +22,16 @@ import pinia from '@/store'
 import vSlideIn from '@/directives/vSlideIn.ts'
 import vLazy from '@/directives/vLazy.ts'
 import vViewRequest from '@/directives/vViewRequest.ts'
+// md-editor配置
+import { config } from 'md-editor-v3'
+import { lineNumbers } from '@codemirror/view'
+
+// 配置md-editor的CodeMirror扩展
+config({
+  codeMirrorExtensions(_theme, extensions) {
+    return [...extensions, lineNumbers()];
+  }
+});
 
 // 获取应用实例对象
 const app = createApp(App)
