@@ -51,14 +51,15 @@ export const chatAPI = {
 
 export const agentAPI = {
   // 发送消息（流式响应）
-  sendMessage(articleMessage:string, userMessage: string, sessionId: string | null, type: string) {
+  sendMessage(articleInfo:string, userMessage: string, articleContent: string, sessionId: string | null, type: string) {
     return fetch('/api/agent/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        article_message:articleMessage,
+        article_info:articleInfo,
+        article_content: articleContent,
         user_message: userMessage,
         type: type,
         session_id: sessionId

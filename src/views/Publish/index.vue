@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { nextTick } from 'vue'
 import CustomMarkdownEditor from '@/components/CustomMarkdownEditor/index.vue'
 import { ElMessage } from 'element-plus'
 import { Loading, Check, Delete, Edit, ArrowLeft, ArrowRight, ChatLineSquare } from '@element-plus/icons-vue'
@@ -97,7 +98,7 @@ const deleteSessionId = ref<string | null>(null)
 const deleteSessionName = ref<string>('')
 
 // 分割器相关
-const leftPanelWidth = ref(65) // 左侧面板宽度百分比，默认65%
+const leftPanelWidth = ref(72) // 左侧面板宽度百分比，默认65%
 const isDragging = ref(false)
 const splitterRef = ref<HTMLElement | null>(null)
 
@@ -785,9 +786,12 @@ const sendAiMessage = async (message: string) => {
 // 发送AI流式消息
 const sendAiStreamMessage = async (message: string) => {
   // 构建包含文章上下文的提示
-  const articleMessage = buildArticleMessage()
+  const articleInfo = buildArticleInfo()
   
-  const response = await agentAPI.sendMessage(articleMessage,message, currentSessionId.value, aiMode.value)
+  // 优先使用diffContent，如果不存在则使用原始articleContent
+  const currentContent = diffContent.value || formData.value.articleContent || ''
+  
+  const response = await agentAPI.sendMessage(articleInfo, message, currentContent, currentSessionId.value, aiMode.value)
   
   if (!response.ok) {
     throw new Error('HTTP ' + response.status)
@@ -925,7 +929,12 @@ const sendAiStreamMessage = async (message: string) => {
                       
                       if (typeof parsedLineNumber === 'number' && !isNaN(parsedLineNumber) && new_content !== undefined) {
                         // 将文章内容按行分割
-                        const lines = (formData.value.articleContent || '').split('\n')
+                        let lines = []
+                        if (!diffContent.value){
+                          lines = (formData.value.articleContent || '').split('\n')
+                        } else {
+                          lines = diffContent.value.split('\n')
+                        }
                         
                         // 将1-based行号转换为0-based索引
                         const arrayIndex = parsedLineNumber - 1
@@ -938,7 +947,10 @@ const sendAiStreamMessage = async (message: string) => {
                           // formData.value.articleContent = lines.join('\n')
                           prevContent.value = formData.value.articleContent || ''
                           diffContent.value = lines.join('\n')
-                          showDiff.value = true
+                          showDiff.value = false
+                          nextTick(() => {
+                            showDiff.value = true
+                          })
                           
                   
                           console.log(`已更新第${parsedLineNumber}行内容为: ${new_content}`)
@@ -966,7 +978,12 @@ const sendAiStreamMessage = async (message: string) => {
                         typeof end === 'number' && !isNaN(end) &&
                         start >= 1 && end >= start
                       ) {
-                        const lines = (formData.value.articleContent || '').split('\n')
+                        let lines = []
+                        if (!diffContent.value){
+                          lines = (formData.value.articleContent || '').split('\n')
+                        } else {
+                          lines = diffContent.value.split('\n')
+                        }
                         const startIdx = start - 1
                         const endIdx = end - 1
 
@@ -982,12 +999,79 @@ const sendAiStreamMessage = async (message: string) => {
 
                         prevContent.value = formData.value.articleContent || ''
                         diffContent.value = updated.join('\n')
-                        showDiff.value = true
+                        // 强制重新初始化差异统计
+                        showDiff.value = false
+                        nextTick(() => {
+                          showDiff.value = true
+                        })
                       } else {
                         console.warn('update_content_by_block 参数无效:', toolData)
                       }
                     } catch (error) {
                       console.error('解析工具返回数据失败:', error, '原始内容:', content)
+                    }
+                  }
+
+                  if (parsed.name === 'update_content_batch'){
+                    try {
+                      const toolData = JSON.parse(content)
+                      const { updates } = toolData
+
+                      if (Array.isArray(updates) && updates.length > 0) {
+                        let lines = []
+                        if (!diffContent.value){
+                          lines = (formData.value.articleContent || '').split('\n')
+                        } else {
+                          lines = diffContent.value.split('\n')
+                        }
+
+                        // 按起始行号从大到小排序，这样从后往前更新，避免行号变化的问题
+                        const sortedUpdates = [...updates].sort((a: any, b: any) => {
+                          const startA = typeof a.start_line === 'string' ? parseInt(a.start_line, 10) : a.start_line
+                          const startB = typeof b.start_line === 'string' ? parseInt(b.start_line, 10) : b.start_line
+                          return startB - startA // 降序排列
+                        })
+
+                        // 依次执行更新，从后往前更新
+                        for (const update of sortedUpdates as any[]) {
+                          const start = typeof update.start_line === 'string' ? parseInt(update.start_line, 10) : update.start_line
+                          const end = typeof update.end_line === 'string' ? parseInt(update.end_line, 10) : update.end_line
+
+                          if (
+                            typeof start === 'number' && !isNaN(start) &&
+                            typeof end === 'number' && !isNaN(end) &&
+                            start >= 1 && end >= start
+                          ) {
+                            const startIdx = start - 1
+                            const endIdx = end - 1
+
+                            const newLines = Array.isArray(update.new_content)
+                              ? update.new_content
+                              : (update.new_content ?? '').toString().split('\n')
+
+                            lines = [
+                              ...lines.slice(0, startIdx),
+                              ...newLines,
+                              ...lines.slice(endIdx + 1)
+                            ]
+                          } else {
+                            console.warn('update_content_batch 中某个更新项参数无效:', update)
+                          }
+                        }
+
+                         prevContent.value = formData.value.articleContent || ''
+                         diffContent.value = lines.join('\n')
+                         // 强制重新初始化差异统计
+                         showDiff.value = false
+                         nextTick(() => {
+                           showDiff.value = true
+                         })
+                         console.log(`批量更新完成，共处理 ${updates.length} 个更新项`)
+                      } else {
+                        console.warn('update_content_batch 参数无效或为空:', toolData)
+                      }
+                    } catch (error) {
+                      console.error('解析 update_content_batch 工具返回数据失败:', error, '原始内容:', content)
                     }
                   }
                 }
@@ -1052,23 +1136,19 @@ const sendAiStreamMessage = async (message: string) => {
   }
 }
 
-// 构建包含文章上下文的提示消息
-const buildArticleMessage = () => {
-  // 为文章内容添加行号
-  const contentWithLineNumbers = addLineNumbers(formData.value.articleContent || '暂无内容')
-  
-  const articleContext = `
+const buildArticleInfo = () => {
+
+  const articleInfo = `
 当前文章信息：
 标题：${formData.value.articleTitle || '未设置'}
 分类：${categoryList.value.find((c: any) => c.id === formData.value.categoryId)?.categoryName || '未选择'}
 标签：${tagList.value.filter((t: any) => Array.isArray(formData.value.tagId) && (formData.value.tagId as number[]).includes(t.id)).map((t: any) => t.tagName).join(', ') || '未选择'}
 类型：${formData.value.articleType === 1 ? '原创' : formData.value.articleType === 2 ? '转载' : '翻译'}
 状态：${formData.value.status === 1 ? '公开' : formData.value.status === 2 ? '私密' : '草稿'}
-文章内容：
-${contentWithLineNumbers}
 `
-  return articleContext
+  return articleInfo
 }
+
 
 // 为文本内容添加行号
 const addLineNumbers = (content: string) => {
@@ -1280,6 +1360,81 @@ const generateTestDiff = () => {
   ElMessage.success('已生成测试diff内容')
 }
 
+// 测试批量更新功能
+const testBatchUpdate = () => {
+  const currentContent = formData.value.articleContent || ''
+  if (!currentContent.trim()) {
+    ElMessage.warning('请先输入一些文章内容')
+    return
+  }
+  
+  const lines = currentContent.split('\n')
+  if (lines.length < 3) {
+    ElMessage.warning('文章内容太少，无法进行批量更新测试')
+    return
+  }
+  
+  // 模拟批量更新：修改第2行和第4行
+  const updates = [
+    {
+      start_line: "2",
+      end_line: "2", 
+      new_content: "这是修改后的第二行内容（批量更新测试）"
+    },
+    {
+      start_line: "4",
+      end_line: "4",
+      new_content: "这是修改后的第四行内容（批量更新测试）"
+    }
+  ]
+  
+  // 模拟工具返回的数据
+  const toolData = {
+    updates: updates,
+    summary: "批量更新测试"
+  }
+  
+  // 执行批量更新逻辑
+  try {
+    let updatedLines = [...lines]
+    
+    // 按起始行号从大到小排序
+    const sortedUpdates = [...updates].sort((a: any, b: any) => {
+      const startA = parseInt(a.start_line, 10)
+      const startB = parseInt(b.start_line, 10)
+      return startB - startA
+    })
+    
+    // 从后往前更新
+    for (const update of sortedUpdates as any[]) {
+      const start = parseInt(update.start_line, 10)
+      const end = parseInt(update.end_line, 10)
+      
+      if (start >= 1 && end >= start && start <= updatedLines.length) {
+        const startIdx = start - 1
+        const endIdx = end - 1
+        
+        const newLines = update.new_content.split('\n')
+        
+        updatedLines = [
+          ...updatedLines.slice(0, startIdx),
+          ...newLines,
+          ...updatedLines.slice(endIdx + 1)
+        ]
+      }
+    }
+    
+    prevContent.value = currentContent
+    diffContent.value = updatedLines.join('\n')
+    showDiff.value = true
+    
+    ElMessage.success(`批量更新测试完成，共处理 ${updates.length} 个更新项`)
+  } catch (error) {
+    console.error('批量更新测试失败:', error)
+    ElMessage.error('批量更新测试失败')
+  }
+}
+
 // 接受diff更改
 const acceptDiffChanges = () => {
   if (diffContent.value) {
@@ -1422,6 +1577,7 @@ const stopDrag = () => {
             </template>
           </div>
           <el-button @click="generateTestDiff" type="success">测试Diff</el-button>
+          <el-button @click="testBatchUpdate" type="warning">测试批量更新</el-button>
           <el-button @click="() => {
             // 便捷测试：模拟 update_title 提案
             prevTitle = formData.articleTitle
@@ -1570,7 +1726,7 @@ const stopDrag = () => {
         <!-- 自定义编辑器 -->
         <CustomMarkdownEditor
           v-model="formData.articleContent"
-          :height="'65vh'"
+          :height="'60vh'"
           :theme="mode === 'auto' ? 'light' : mode"
           :showDiff="showDiff"
           :diffContent="diffContent"
@@ -1737,8 +1893,8 @@ const stopDrag = () => {
 <style scoped lang="scss">
 .publish-container {
   display: flex;
-  height: calc(100vh - 60px);
-  margin-top: 60px; /* 为固定头部菜单栏留出空间 */
+  height: calc(100vh);
+  margin-top: 45px; /* 为固定头部菜单栏留出空间 */
   background: #F0F8FF;
   padding: 0; /* 移除padding，让侧边栏贴着左侧 */
   max-width: 100%;
@@ -1750,7 +1906,7 @@ const stopDrag = () => {
   display: flex;
   flex: 1;
   min-width: 0;
-  padding: 20px 20px 20px 10px; /* 给主面板区域添加内边距 */
+  padding: 10px 10px 10px 10px; /* 给主面板区域添加内边距 */
 }
 
 /* 侧边栏样式（复用 AiChat 风格，颜色统一） */
@@ -2650,8 +2806,8 @@ const stopDrag = () => {
   .publish-container {
     flex-direction: column;
     padding: 15px;
-    margin-top: 50px; /* 移动端稍微减少顶部间距 */
-    height: calc(100vh - 50px);
+    margin-top: 45px; /* 移动端与桌面端保持一致 */
+    height: calc(100vh - 45px);
     gap: 15px; /* 移动端恢复gap */
   }
   
