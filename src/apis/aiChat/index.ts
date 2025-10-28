@@ -29,13 +29,17 @@ export const sessionAPI = {
   // 删除会话
   deleteSession(sessionId: string) {
     return api.delete(`/sessions/${sessionId}`)
-  }
+  },
+
+  getModels() {
+    return api.get('/models')
+  },
 }
 
 // 聊天API
 export const chatAPI = {
   // 发送消息（流式响应）
-  sendMessage(message: string, sessionId: string | null) {
+  sendMessage(message: string, sessionId: string | null, model: string) {
     return fetch('/api/chat', {
       method: 'POST',
       headers: {
@@ -43,7 +47,8 @@ export const chatAPI = {
       },
       body: JSON.stringify({
         message,
-        session_id: sessionId
+        session_id: sessionId,
+        model: model
       })
     })
   },

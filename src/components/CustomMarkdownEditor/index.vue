@@ -127,6 +127,38 @@
             </div>
           </div>
         </div>
+        <div class="dropdown-container" @mouseenter="showVideoMenu = true" @mouseleave="hideVideoMenu">
+          <button class="toolbar-btn" title="视频">
+            <i class="fas fa-video"></i>
+          </button>
+          <div v-show="showVideoMenu" class="dropdown-menu video-menu">
+            <div class="video-input-form">
+              <div class="input-group">
+                <label class="input-label">视频链接</label>
+                <input 
+                  v-model="videoUrl" 
+                  type="url" 
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  class="video-input"
+                  @keyup.enter="insertVideo"
+                />
+              </div>
+              <div class="video-platforms">
+                <div class="platform-label">支持的平台：</div>
+                <div class="platform-tags">
+                  <span class="platform-tag youtube">YouTube</span>
+                  <span class="platform-tag bilibili">哔哩哔哩</span>
+                  <span class="platform-tag vimeo">Vimeo</span>
+                  <span class="platform-tag direct">视频文件</span>
+                </div>
+              </div>
+              <div class="video-actions">
+                <button class="video-btn cancel-btn" @click="cancelVideo">取消</button>
+                <button class="video-btn insert-btn" @click="insertVideo">插入视频</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <input ref="imageFileInput" type="file" accept="image/*" style="display:none" @change="onImageFileChange" />
         <input ref="imageCropInput" type="file" accept="image/*" style="display:none" @change="onImageCropFileChange" />
       </div>
@@ -289,6 +321,10 @@ const showCropModal = ref(false)
 const cropImageData = ref('')
 const cropImageFile = ref<File | null>(null)
 
+// 视频相关
+const showVideoMenu = ref(false)
+const videoUrl = ref('')
+
 // Monaco编辑器相关
 let monacoEditor: monaco.editor.IStandaloneCodeEditor | null = null
 let monacoDiffEditor: monaco.editor.IStandaloneDiffEditor | null = null
@@ -322,6 +358,227 @@ const md = new MarkdownIt({
     return '<pre class="hljs"><div class="code-header"><span class="code-lang">code</span><button class="code-toggle" aria-expanded="true" title="收起/展开"><i class="fas fa-chevron-down"></i></button></div><div class="code-content"><div class="line-numbers">' + lineNumbers + '</div><code>' + MarkdownIt().utils.escapeHtml(trimmedStr) + '</code></div></pre>';
   }
 })
+
+// 添加视频链接渲染规则
+md.renderer.rules.link_open = function (tokens, idx, options, _env, renderer) {
+  const token = tokens[idx]
+  const href = token.attrGet('href')
+  
+  // 检查是否是视频链接
+  if (href && isVideoUrl(href)) {
+    const videoId = extractVideoId(href)
+    const platform = getVideoPlatform(href)
+    
+    if (videoId && platform) {
+      return `<div class="video-container" data-platform="${platform}" data-video-id="${videoId}">`
+    }
+  }
+  
+  // 默认链接渲染
+  return renderer.renderToken(tokens, idx, options)
+}
+
+md.renderer.rules.link_close = function (tokens, idx, options, _env, renderer) {
+  const prevToken = tokens[idx - 1]
+  
+  // 检查前一个token是否是视频链接
+  if (prevToken && prevToken.type === 'link_open') {
+    const href = prevToken.attrGet('href')
+    if (href && isVideoUrl(href)) {
+      const videoId = extractVideoId(href)
+      const platform = getVideoPlatform(href)
+      
+      if (videoId && platform) {
+        return generateVideoEmbed(videoId, platform) + '</div>'
+      }
+    }
+  }
+  
+  // 默认链接渲染
+  return renderer.renderToken(tokens, idx, options)
+}
+
+// 视频URL检测函数
+function isVideoUrl(url: string): boolean {
+  const videoPatterns = [
+    /^https?:\/\/(www\.)?youtube\.com\/watch\?v=/,
+    /^https?:\/\/youtu\.be\//,
+    /^https?:\/\/(www\.)?bilibili\.com\/video\//,
+    /^https?:\/\/(www\.)?vimeo\.com\/\d+/,
+    /^https?:\/\/(www\.)?dailymotion\.com\/video\//,
+    /^https?:\/\/(www\.)?twitch\.tv\/videos\//,
+    /\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i
+  ]
+  
+  return videoPatterns.some(pattern => pattern.test(url))
+}
+
+// 提取视频ID
+function extractVideoId(url: string): string | null {
+  // YouTube
+  if (url.includes('youtube.com/watch')) {
+    const match = url.match(/[?&]v=([^&]+)/)
+    return match ? match[1] : null
+  }
+  if (url.includes('youtu.be/')) {
+    const match = url.match(/youtu\.be\/([^?]+)/)
+    return match ? match[1] : null
+  }
+  
+  // Bilibili
+  if (url.includes('bilibili.com/video/')) {
+    const match = url.match(/\/video\/([^\/\?]+)/)
+    return match ? match[1] : null
+  }
+  
+  // Vimeo
+  if (url.includes('vimeo.com/')) {
+    const match = url.match(/vimeo\.com\/(\d+)/)
+    return match ? match[1] : null
+  }
+  
+  // Dailymotion
+  if (url.includes('dailymotion.com/video/')) {
+    const match = url.match(/\/video\/([^_]+)/)
+    return match ? match[1] : null
+  }
+  
+  // Twitch
+  if (url.includes('twitch.tv/videos/')) {
+    const match = url.match(/\/videos\/(\d+)/)
+    return match ? match[1] : null
+  }
+  
+  // 直接视频文件
+  if (/\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i.test(url)) {
+    return url
+  }
+  
+  return null
+}
+
+// 获取视频平台
+function getVideoPlatform(url: string): string | null {
+  if (url.includes('youtube.com') || url.includes('youtu.be')) return 'youtube'
+  if (url.includes('bilibili.com')) return 'bilibili'
+  if (url.includes('vimeo.com')) return 'vimeo'
+  if (url.includes('dailymotion.com')) return 'dailymotion'
+  if (url.includes('twitch.tv')) return 'twitch'
+  if (/\.(mp4|webm|ogg|mov|avi|mkv)(\?.*)?$/i.test(url)) return 'direct'
+  
+  return null
+}
+
+// 生成视频嵌入代码
+function generateVideoEmbed(videoId: string, platform: string): string {
+  switch (platform) {
+    case 'youtube':
+      return `
+        <div class="video-embed youtube-embed">
+          <iframe 
+            src="https://www.youtube.com/embed/${videoId}" 
+            frameborder="0" 
+            allowfullscreen
+            loading="lazy"
+            title="YouTube视频">
+          </iframe>
+          <div class="video-info">
+            <span class="video-platform">YouTube</span>
+            <a href="https://www.youtube.com/watch?v=${videoId}" target="_blank" class="video-link">在新窗口打开</a>
+          </div>
+        </div>
+      `
+    
+    case 'bilibili':
+      return `
+        <div class="video-embed bilibili-embed">
+          <iframe 
+            src="https://player.bilibili.com/player.html?bvid=${videoId}&autoplay=0" 
+            frameborder="0" 
+            allowfullscreen
+            loading="lazy"
+            title="B站视频">
+          </iframe>
+          <div class="video-info">
+            <span class="video-platform">哔哩哔哩</span>
+            <a href="https://www.bilibili.com/video/${videoId}" target="_blank" class="video-link">在新窗口打开</a>
+          </div>
+        </div>
+      `
+    
+    case 'vimeo':
+      return `
+        <div class="video-embed vimeo-embed">
+          <iframe 
+            src="https://player.vimeo.com/video/${videoId}" 
+            frameborder="0" 
+            allowfullscreen
+            loading="lazy"
+            title="Vimeo视频">
+          </iframe>
+          <div class="video-info">
+            <span class="video-platform">Vimeo</span>
+            <a href="https://vimeo.com/${videoId}" target="_blank" class="video-link">在新窗口打开</a>
+          </div>
+        </div>
+      `
+    
+    case 'dailymotion':
+      return `
+        <div class="video-embed dailymotion-embed">
+          <iframe 
+            src="https://www.dailymotion.com/embed/video/${videoId}" 
+            frameborder="0" 
+            allowfullscreen
+            loading="lazy"
+            title="Dailymotion视频">
+          </iframe>
+          <div class="video-info">
+            <span class="video-platform">Dailymotion</span>
+            <a href="https://www.dailymotion.com/video/${videoId}" target="_blank" class="video-link">在新窗口打开</a>
+          </div>
+        </div>
+      `
+    
+    case 'twitch':
+      return `
+        <div class="video-embed twitch-embed">
+          <iframe 
+            src="https://player.twitch.tv/?video=${videoId}&parent=${window.location.hostname}" 
+            frameborder="0" 
+            allowfullscreen
+            loading="lazy"
+            title="Twitch视频">
+          </iframe>
+          <div class="video-info">
+            <span class="video-platform">Twitch</span>
+            <a href="https://www.twitch.tv/videos/${videoId}" target="_blank" class="video-link">在新窗口打开</a>
+          </div>
+        </div>
+      `
+    
+    case 'direct':
+      return `
+        <div class="video-embed direct-embed">
+          <video 
+            controls 
+            preload="metadata"
+            style="width: 100%; max-width: 100%;"
+            title="视频文件">
+            <source src="${videoId}" type="video/mp4">
+            您的浏览器不支持视频播放。
+          </video>
+          <div class="video-info">
+            <span class="video-platform">视频文件</span>
+            <a href="${videoId}" target="_blank" class="video-link">下载视频</a>
+          </div>
+        </div>
+      `
+    
+    default:
+      return `<div class="video-error">不支持的视频平台</div>`
+  }
+}
 
 
 // 工具栏功能
@@ -369,10 +626,6 @@ const insertStrikethrough = () => {
   insertText('~~', '~~')
 }
 
-// 插入表格（默认2行3列）
-const insertTable = () => {
-  insertTableWithSize(2, 3)
-}
 
 // 选择表格大小
 const selectTableSize = (rows: number, cols: number) => {
@@ -634,6 +887,58 @@ const insertImageByUrl = () => {
   imageAlt.value = ''
   imageUrl.value = ''
   showImageMenu.value = false
+}
+
+// 视频菜单相关方法
+const hideVideoMenu = () => {
+  setTimeout(() => {
+    showVideoMenu.value = false
+  }, 200)
+}
+
+// 插入视频
+const insertVideo = () => {
+  if (!monacoEditor) return
+  
+  const selection = monacoEditor.getSelection()
+  if (!selection) return
+  
+  if (!videoUrl.value.trim()) {
+    ElMessage.warning('请输入视频链接')
+    return
+  }
+  
+  // 检查是否是支持的视频平台
+  if (!isVideoUrl(videoUrl.value)) {
+    ElMessage.warning('不支持的视频平台，请使用YouTube、哔哩哔哩、Vimeo或直接视频文件链接')
+    return
+  }
+  
+  const videoMarkdown = `[](${videoUrl.value})`
+  
+  monacoEditor.executeEdits('insert-video', [{
+    range: selection,
+    text: videoMarkdown,
+    forceMoveMarkers: true
+  }])
+  
+  // 调整光标位置
+  const newPosition = {
+    lineNumber: selection.startLineNumber,
+    column: selection.startColumn + videoMarkdown.length
+  }
+  monacoEditor.setPosition(newPosition)
+  monacoEditor.focus()
+  
+  // 清空输入
+  videoUrl.value = ''
+  showVideoMenu.value = false
+}
+
+// 取消视频插入
+const cancelVideo = () => {
+  videoUrl.value = ''
+  showVideoMenu.value = false
 }
 
 // 取消图片输入
@@ -1206,6 +1511,11 @@ const onPreviewClick = (e: MouseEvent) => {
   padding: 16px;
 }
 
+.video-menu {
+  min-width: 320px;
+  padding: 16px;
+}
+
 .link-input-form {
   .input-group {
     margin-bottom: 12px;
@@ -1413,6 +1723,116 @@ const onPreviewClick = (e: MouseEvent) => {
   }
 }
 
+.video-input-form {
+  .input-group {
+    margin-bottom: 12px;
+    
+    .input-label {
+      display: block;
+      font-size: 12px;
+      color: #374151;
+      margin-bottom: 4px;
+      font-weight: 500;
+    }
+    
+    .video-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      font-size: 14px;
+      transition: border-color 0.15s ease;
+      
+      &:focus {
+        outline: none;
+        border-color: #3b82f6;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      }
+      
+      &::placeholder {
+        color: #9ca3af;
+      }
+    }
+  }
+  
+  .video-platforms {
+    margin: 12px 0;
+    
+    .platform-label {
+      font-size: 12px;
+      color: #6b7280;
+      margin-bottom: 8px;
+    }
+    
+    .platform-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      
+      .platform-tag {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 11px;
+        font-weight: 500;
+        
+        &.youtube {
+          background: #fee2e2;
+          color: #dc2626;
+        }
+        
+        &.bilibili {
+          background: #dbeafe;
+          color: #2563eb;
+        }
+        
+        &.vimeo {
+          background: #d1fae5;
+          color: #059669;
+        }
+        
+        &.direct {
+          background: #f3e8ff;
+          color: #7c3aed;
+        }
+      }
+    }
+  }
+  
+  .video-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 16px;
+    
+    .video-btn {
+      flex: 1;
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      
+      &.cancel-btn {
+        background: #f3f4f6;
+        color: #374151;
+        
+        &:hover {
+          background: #e5e7eb;
+        }
+      }
+      
+      &.insert-btn {
+        background: #3b82f6;
+        color: white;
+        
+        &:hover {
+          background: #2563eb;
+        }
+      }
+    }
+  }
+}
+
 .editor-container {
   flex: 1;
   display: flex;
@@ -1600,6 +2020,133 @@ const onPreviewClick = (e: MouseEvent) => {
     max-width: 100%;
     height: auto;
     border-radius: 4px;
+  }
+  
+  // 视频容器样式
+  :deep(.video-container) {
+    margin: 16px 0;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    background: #f8f9fa;
+  }
+  
+  :deep(.video-embed) {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 56.25%; // 16:9 宽高比
+    background: #000;
+    
+    iframe {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    
+    video {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    
+    .video-info {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+      color: white;
+      padding: 12px 16px 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      pointer-events: none; // 禁用鼠标事件，让点击穿透到视频
+      z-index: 1; // 确保在视频上方但不阻挡交互
+      opacity: 1; // 默认隐藏
+      transition: opacity 0.3s ease;
+      
+      .video-platform {
+        font-weight: 500;
+        opacity: 0.9;
+        pointer-events: none; // 平台标签也不响应点击
+      }
+      
+      .video-link {
+        color: #60a5fa;
+        text-decoration: none;
+        opacity: 0.8;
+        transition: opacity 0.2s ease;
+        pointer-events: auto; // 只有链接可以点击
+        padding: 4px 8px;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.3);
+        
+        &:hover {
+          opacity: 1;
+          background: rgba(0, 0, 0, 0.5);
+        }
+      }
+    }
+    
+    // 悬停时显示信息栏
+    &:hover .video-info {
+      opacity: 1;
+    }
+  }
+  
+  // 不同平台的视频样式
+  :deep(.youtube-embed) {
+    .video-info {
+      background: linear-gradient(transparent, rgba(255, 0, 0, 0.8));
+    }
+  }
+  
+  :deep(.bilibili-embed) {
+    .video-info {
+      background: linear-gradient(transparent, rgba(0, 123, 255, 0.8));
+    }
+  }
+  
+  :deep(.vimeo-embed) {
+    .video-info {
+      background: linear-gradient(transparent, rgba(26, 183, 234, 0.8));
+    }
+  }
+  
+  :deep(.dailymotion-embed) {
+    .video-info {
+      background: linear-gradient(transparent, rgba(0, 174, 239, 0.8));
+    }
+  }
+  
+  :deep(.twitch-embed) {
+    .video-info {
+      background: linear-gradient(transparent, rgba(145, 70, 255, 0.8));
+    }
+  }
+  
+  :deep(.direct-embed) {
+    .video-info {
+      background: linear-gradient(transparent, rgba(75, 85, 99, 0.8));
+    }
+  }
+  
+  :deep(.video-error) {
+    padding: 20px;
+    text-align: center;
+    color: #ef4444;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    margin: 16px 0;
   }
   
   :deep(hr) {

@@ -80,8 +80,69 @@
 
       <div class="chat-messages" ref="chatMessages">
         <div v-if="messages.length === 0" class="welcome-message">
-          <br><br><br><br>
-          <h3>有什么可以帮忙的？</h3>
+          <br><br><br><br><br><br><br><br></br>
+          <h3>{{ randomWelcomeMessage }}</h3>
+          
+          <!-- 无消息时的输入框 -->
+          <div class="welcome-input-container">
+            <div class="input-wrapper">
+              <!-- Model选择器 -->
+              <div class="model-selector">
+                <div class="model-dropdown" @click="toggleModelDropdown" :class="{ active: showModelDropdown }">
+                  <img 
+                    :src="getSelectedModelIcon()" 
+                    :alt="getSelectedModelName()"
+                    class="model-icon"
+                    @error="handleIconError"
+                  />
+                  <span class="model-text">{{ getSelectedModelName() }}</span>
+                  <i class="fas fa-chevron-down model-arrow"></i>
+                </div>
+                <div class="model-options" v-show="showModelDropdown">
+                  <div 
+                    v-for="modelInfo in availableModels" 
+                    :key="modelInfo.model"
+                    class="model-option" 
+                    @click="selectModel(modelInfo.model)" 
+                    :class="{ active: selectedModel === modelInfo.model }"
+                  >
+                    <img 
+                      :src="modelInfo.icon_url" 
+                      :alt="modelInfo.model_name"
+                      class="option-icon"
+                      @error="handleIconError"
+                    />
+                    <span class="option-text">{{ modelInfo.model_name }}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <textarea 
+                ref="welcomeMessageInput"
+                v-model="inputMessage"
+                class="message-input"
+                placeholder="询问任何问题" 
+                rows="1"
+                @keydown="handleKeyDown"
+                @input="autoResize"
+              ></textarea>
+              <button 
+                class="send-btn" 
+                @click="handleSendMessage"
+                :disabled="!inputMessage.trim() || isTyping"
+              >
+                <el-icon><Promotion /></el-icon>
+              </button>
+            </div>
+            <div class="input-footer">
+              <span class="typing-indicator" v-if="isTyping">
+                <span class="dot"></span>
+                <span class="dot"></span>
+                <span class="dot"></span>
+                AI正在回答...
+              </span>
+            </div>
+          </div>
         </div>
         
         <div 
@@ -149,8 +210,39 @@
         </div>
       </div>
 
-      <div class="chat-input-container">
+      <div class="chat-input-container" v-if="messages.length > 0">
         <div class="input-wrapper">
+          <!-- Model选择器 -->
+          <div class="model-selector">
+            <div class="model-dropdown" @click="toggleModelDropdown" :class="{ active: showModelDropdown }">
+              <img 
+                :src="getSelectedModelIcon()" 
+                :alt="getSelectedModelName()"
+                class="model-icon"
+                @error="handleIconError"
+              />
+              <span class="model-text">{{ getSelectedModelName() }}</span>
+              <i class="fas fa-chevron-down model-arrow"></i>
+            </div>
+            <div class="model-options" v-show="showModelDropdown">
+              <div 
+                v-for="modelInfo in availableModels" 
+                :key="modelInfo.model"
+                class="model-option" 
+                @click="selectModel(modelInfo.model)" 
+                :class="{ active: selectedModel === modelInfo.model }"
+              >
+                <img 
+                  :src="modelInfo.icon_url" 
+                  :alt="modelInfo.model_name"
+                  class="option-icon"
+                  @error="handleIconError"
+                />
+                <span class="option-text">{{ modelInfo.model_name }}</span>
+              </div>
+            </div>
+          </div>
+          
           <textarea 
             ref="messageInput"
             v-model="inputMessage"
@@ -208,7 +300,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, nextTick, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete, Edit, Promotion, ArrowLeft, ArrowRight, Check, Loading, ChatLineSquare } from '@element-plus/icons-vue'
 import { sessionAPI, chatAPI } from '@/apis/aiChat'
@@ -240,6 +332,23 @@ interface ArticleInfo {
   cover: string
 }
 
+interface ModelInfo {
+  model: string
+  model_name: string
+  icon_url: string
+}
+
+// 欢迎消息集合
+const welcomeMessages = [
+  '有什么可以帮忙的？',
+  '今天想聊什么呢？',
+  '今天有什么计划？',
+  '我们先从哪里开始呢？',
+  '您在忙什么？',
+  '需要什么帮助吗？',
+  '您今天在想什么？',
+]
+
 // 响应式数据
 const sessions = ref<ChatSession[]>([])
 const messages = ref<ChatMessage[]>([])
@@ -251,16 +360,37 @@ const showDeleteDialog = ref(false)
 const deleteSessionId = ref<string | null>(null)
 const sidebarCollapsed = ref(true)
 const sidebarHovered = ref(false)
-let hoverTimeout: number | null = null
+let hoverTimeout: ReturnType<typeof setTimeout> | null = null
+
+// Model选择相关
+const availableModels = ref<ModelInfo[]>([])
+const selectedModel = ref('gemini_flash')
+const showModelDropdown = ref(false)
+
+// 计算属性 - 随机欢迎消息
+const randomWelcomeMessage = computed(() => {
+  const randomIndex = Math.floor(Math.random() * welcomeMessages.length)
+  return welcomeMessages[randomIndex]
+})
 
 // DOM引用
 const chatMessages = ref<HTMLElement | null>(null)
 const messageInput = ref<HTMLTextAreaElement | null>(null)
+const welcomeMessageInput = ref<HTMLTextAreaElement | null>(null)
 const inputMessage = ref('')
 
 // 页面加载时初始化
 onMounted(() => {
   loadSessions()
+  loadModels()
+  
+  // 添加点击外部关闭下拉框的事件监听
+  document.addEventListener('click', handleClickOutside)
+})
+
+// 组件卸载时移除事件监听
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
 })
 
 // 监听消息变化，自动滚动到底部
@@ -284,6 +414,24 @@ const loadSessions = async () => {
     ElMessage.error('网络错误: ' + (error.message || error))
   } finally {
     loading.value = false
+  }
+}
+
+// 加载可用模型
+const loadModels = async () => {
+  try {
+    const response = await sessionAPI.getModels()
+    if (response.data.success) {
+      availableModels.value = response.data.models
+      // 如果当前选择的模型不在列表中，选择第一个
+      if (!availableModels.value.some(m => m.model === selectedModel.value)) {
+        selectedModel.value = availableModels.value[0]?.model || 'gemini_flash'
+      }
+    } else {
+      ElMessage.error('加载模型失败: ' + response.data.error)
+    }
+  } catch (error: any) {
+    ElMessage.error('网络错误: ' + (error.message || error))
   }
 }
 
@@ -436,7 +584,7 @@ const sendMessage = async (message: string) => {
 
 // 发送流式消息
 const sendStreamMessage = async (message: string) => {
-  const response = await chatAPI.sendMessage(message, currentSessionId.value)
+  const response = await chatAPI.sendMessage(message, currentSessionId.value, selectedModel.value)
   
   if (!response.ok) {
     throw new Error('HTTP ' + response.status)
@@ -674,6 +822,44 @@ const handleSidebarMouseLeave = () => {
   }
 }
 
+// Model选择相关方法
+const toggleModelDropdown = () => {
+  showModelDropdown.value = !showModelDropdown.value
+}
+
+const selectModel = (model: string) => {
+  selectedModel.value = model
+  showModelDropdown.value = false
+}
+
+// 获取当前选中模型的显示名称
+const getSelectedModelName = () => {
+  const modelInfo = availableModels.value.find(m => m.model === selectedModel.value)
+  return modelInfo?.model_name || selectedModel.value
+}
+
+// 获取当前选中模型的图标
+const getSelectedModelIcon = () => {
+  const modelInfo = availableModels.value.find(m => m.model === selectedModel.value)
+  return modelInfo?.icon_url || ''
+}
+
+// 处理图标加载错误
+const handleIconError = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  console.log('图标加载失败:', img.src)
+  // 不隐藏图片，而是显示一个默认的机器人图标
+  img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTAiIGN5PSIxMCIgcj0iOCIgZmlsbD0iIzY2NjY2NiIvPgo8Y2lyY2xlIGN4PSI3IiBjeT0iOCIgcj0iMSIgZmlsbD0id2hpdGUiLz4KPGNpcmNsZSBjeD0iMTMiIGN5PSI4IiByPSIxIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNNyAxM0M3IDEzIDguNSAxNCAxMCAxNFMxMyAxMyAxMyAxMyIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K'
+}
+
+// 点击外部关闭model下拉框
+const handleClickOutside = (event: Event) => {
+  const target = event.target as HTMLElement
+  if (!target.closest('.model-selector')) {
+    showModelDropdown.value = false
+  }
+}
+
 // 发送消息处理
 const handleSendMessage = () => {
   const message = inputMessage.value.trim()
@@ -696,9 +882,11 @@ const handleKeyDown = (event: KeyboardEvent) => {
 
 // 自动调整输入框高度
 const autoResize = () => {
-  if (messageInput.value) {
-    messageInput.value.style.height = 'auto'
-    messageInput.value.style.height = Math.min(messageInput.value.scrollHeight, 120) + 'px'
+  // 根据消息数量决定调整哪个输入框
+  const currentInput = messages.value.length === 0 ? welcomeMessageInput.value : messageInput.value
+  if (currentInput) {
+    currentInput.style.height = 'auto'
+    currentInput.style.height = Math.min(currentInput.scrollHeight, 120) + 'px'
   }
 }
 
@@ -1107,14 +1295,28 @@ const openImageInNewTab = (imageUrl: string) => {
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
+  user-select: none; /* 防止文本选择 */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  pointer-events: auto; /* 确保可以接收点击事件 */
+  z-index: 1; /* 确保在正确的层级 */
   
-  
-  &:hover {
-    background: #f0f4fa;
+  &:hover { 
+    background: #e8f0fe; 
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
   
-  &.active {
-    background: #f0f4fa;
+  &.active { 
+    background: #e3f2fd; 
+    border-left: 3px solid #2196f3;
+    box-shadow: 0 2px 8px rgba(33, 150, 243, 0.2);
+  }
+  
+  /* 确保点击区域足够大 */
+  &:active {
+    transform: translateX(1px) scale(0.98);
   }
 }
 
@@ -1271,9 +1473,85 @@ const openImageInNewTab = (imageUrl: string) => {
 
 .welcome-message h3 {
   font-size: 2.0em;
-  font-weight: 250;
+  font-weight: 340;
   margin-bottom: 10px;
   color: #333333;
+}
+
+/* 欢迎页面输入框样式 */
+.welcome-input-container {
+  margin-top: 30px;
+  width: 100%;
+  max-width: 750px;
+}
+
+.welcome-input-container .input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+}
+
+.welcome-input-container .message-input {
+  flex: 1;
+  border: 1px solid #e5e5e5;
+  border-radius: 30px;
+  padding: 16px 60px 16px 20px;
+  font-size: 1rem;
+  resize: none;
+  outline: none;
+  transition: all 0.2s ease;
+  font-family: inherit;
+  line-height: 1.5;
+  min-height: 55px;
+  max-height: 150px;
+  background: #f8f9fa;
+  box-sizing: border-box;
+  overflow: hidden;
+  
+  &:focus {
+    border-color: #007bff;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+  }
+  
+  &::placeholder {
+    color: #999999;
+  }
+}
+
+.welcome-input-container .send-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: #b3d9ff;
+  color: #666666;
+  border: none;
+  border-radius: 50%;
+  padding: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  &:hover:not(:disabled) {
+    background: #007bff;
+    color: #ffffff;
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.welcome-input-container .input-footer {
+  text-align: center;
+  margin-top: 15px;
+  min-height: 24px;
 }
 
 /* 消息样式 */
@@ -1321,24 +1599,12 @@ const openImageInNewTab = (imageUrl: string) => {
 }
 
 .user-message .message-content {
-  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  background: linear-gradient(135deg, #adb5bd 0%, #6c757d 100%);
   color: white;
-  border-bottom-right-radius: 1px;
+  border-radius: 18px;
   position: relative;
 }
 
-.user-message .message-content::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  right: -8px;
-  width: 0;
-  height: 0;
-  border: 8px solid transparent;
-  border-left-color: #0056b3;
-  border-bottom: none;
-  border-right: none;
-}
 
 .assistant-message .message-content {
   background: #ffffff;
@@ -1774,14 +2040,17 @@ const openImageInNewTab = (imageUrl: string) => {
 
 .input-wrapper {
   position: relative;
-  max-width: 600px;
+  max-width: 750px;
   margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
 .message-input {
-  width: 100%;
+  flex: 1;
   border: 1px solid #e5e5e5;
-  border-radius: 24px;
+  border-radius: 30px;
   padding: 16px 60px 16px 20px;
   font-size: 1rem;
   resize: none;
@@ -1790,7 +2059,7 @@ const openImageInNewTab = (imageUrl: string) => {
   font-family: inherit;
   line-height: 1.5;
   min-height: 55px;
-  max-height: 120px;
+  max-height: 150px;
   background: #f8f9fa;
   box-sizing: border-box;
   overflow: hidden;
@@ -1809,7 +2078,7 @@ const openImageInNewTab = (imageUrl: string) => {
 .send-btn {
   position: absolute;
   right: 8px;
-  top: 45%;
+  top: 50%;
   transform: translateY(-50%);
   background: #b3d9ff;
   color: #666666;
@@ -1906,6 +2175,110 @@ const openImageInNewTab = (imageUrl: string) => {
     color: #333333;
     font-size: 1.1rem;
   }
+}
+
+/* Model选择器样式 */
+.model-selector {
+  position: relative;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.model-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 20px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  
+  &:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+  }
+  
+  &.active {
+    background: #e3f2fd;
+    border-color: #007bff;
+  }
+}
+
+.model-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.model-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.model-arrow {
+  font-size: 0.8rem;
+  color: #666;
+  transition: transform 0.2s ease;
+}
+
+.model-dropdown.active .model-arrow {
+  transform: rotate(180deg);
+}
+
+.model-options {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.9rem;
+  color: #333333;
+  
+  &:hover {
+    background: #f8f9fa;
+  }
+  
+  &.active {
+    background: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+  }
+  
+  &:not(:last-child) {
+    border-bottom: 1px solid #f0f0f0;
+  }
+}
+
+.option-icon {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.option-text {
+  font-weight: 500;
 }
 
 /* 响应式设计 */

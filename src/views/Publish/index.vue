@@ -2512,9 +2512,9 @@ const stopDrag = () => {
 }
 
 .user-message .ai-message-content {
-  background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+  background: linear-gradient(135deg, #adb5bd 0%, #6c757d 100%);
   color: white;
-  border-bottom-right-radius: 4px;
+  border-radius: 18px;
 }
 
 .assistant-message .ai-message-content {
@@ -2620,7 +2620,7 @@ const stopDrag = () => {
 .ai-message-input {
   width: 100%;
   border: 1px solid #e5e5e5;
-  border-radius: 20px;
+  border-radius: 30px;
   padding: 12px 50px 12px 16px;
   font-size: 0.9rem;
   resize: none;
