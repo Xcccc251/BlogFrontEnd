@@ -654,7 +654,7 @@ const sendStreamMessage = async (message: string) => {
                 content: '',
                 bubbleId: bubbleId,
                 messageType: 'thinking',
-                collapsed: true
+                collapsed: false
               })
             } else if (parsed.type === 'thinking') {
               // 思考内容，逐步更新思考气泡
@@ -668,7 +668,7 @@ const sendStreamMessage = async (message: string) => {
                   content: '',
                   bubbleId: bubbleId,
                   messageType: 'thinking',
-                  collapsed: true
+                  collapsed: false
                 })
               }
               
@@ -680,12 +680,13 @@ const sendStreamMessage = async (message: string) => {
                 messages.value[messageIndex].content = bubbleContents.get(bubbleId)!
               }
             } else if (parsed.type === 'thinking_end') {
-              // 思考结束，保持thinking类型
+              // 思考结束，收起思考气泡
               const bubbleId = parsed.bubble_id
               const messageIndex = messages.value.findIndex((msg: ChatMessage) => msg.bubbleId === bubbleId)
               if (messageIndex !== -1) {
-                // 保持thinking类型，标记为已完成
+                // 标记为已完成并收起
                 messages.value[messageIndex].messageType = 'thinking_complete'
+                messages.value[messageIndex].collapsed = true
               }
             } else if (parsed.type === 'tool_start') {
               // 工具开始，创建新的气泡
