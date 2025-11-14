@@ -162,7 +162,9 @@
                   </el-icon>
                 </span>
               </div>
-              <div v-show="!message.collapsed" class="thinking-content" v-html="formatMessage(message.content)"></div>
+              <transition name="thinking-expand">
+                <div v-show="!message.collapsed" class="thinking-content" v-html="formatMessage(message.content)"></div>
+              </transition>
             </div>
             <!-- 如果是图片生成工具结果，显示图片 -->
             <div v-else-if="message.messageType === 'image_result'" class="image-container">
@@ -697,14 +699,21 @@ const sendStreamMessage = async (message: string) => {
               if (parsed.tool_name === 'generate_image') {
                 messages.value.push({
                   role: 'assistant',
-                  content: `Generating image...`,
+                  content: `Generating image ...`,
                   bubbleId: bubbleId,
                   messageType: 'tool_start'
                 })
-              } else {
+              } else if (parsed.tool_name === 'search_articles') {
                 messages.value.push({
                   role: 'assistant',
-                  content: `Searching...`,
+                  content: `Searching ...`,
+                  bubbleId: bubbleId,
+                  messageType: 'tool_start'
+                })
+              } else if (parsed.tool_name === 'get_article_detail'){
+                messages.value.push({
+                  role: 'assistant',
+                  content: `Reading ...`,
                   bubbleId: bubbleId,
                   messageType: 'tool_start'
                 })
@@ -1764,18 +1773,42 @@ const toggleThinkingCollapse = (index: number) => {
   padding: 0 16px 16px 45px;
   font-style: italic;
   line-height: 1.6;
-  animation: slideDown 0.3s ease;
+  overflow: hidden;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 1000px;
-  }
+/* Transition动画 */
+.thinking-expand-enter-active {
+  transition: all 0.3s ease;
+  max-height: 1000px;
+}
+
+.thinking-expand-leave-active {
+  transition: all 0.3s ease;
+  max-height: 1000px;
+}
+
+.thinking-expand-enter-from {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.thinking-expand-enter-to {
+  opacity: 1;
+  max-height: 1000px;
+}
+
+.thinking-expand-leave-from {
+  opacity: 1;
+  max-height: 1000px;
+}
+
+.thinking-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .thinking-message .message-content {
