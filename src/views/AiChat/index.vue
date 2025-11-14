@@ -630,12 +630,21 @@ const sendStreamMessage = async (message: string) => {
               bubbleContents.set(bubbleId, '')
               bubbleTools.set(bubbleId, parsed.tool_name) // 保存工具名称
               
-              messages.value.push({
-                role: 'assistant',
-                content: `🔍 正在使用工具: ${parsed.tool_name}...`,
-                bubbleId: bubbleId,
-                messageType: 'tool_start'
-              })
+              if (parsed.tool_name === 'generate_image') {
+                messages.value.push({
+                  role: 'assistant',
+                  content: `Generating image...`,
+                  bubbleId: bubbleId,
+                  messageType: 'tool_start'
+                })
+              } else {
+                messages.value.push({
+                  role: 'assistant',
+                  content: `Searching...`,
+                  bubbleId: bubbleId,
+                  messageType: 'tool_start'
+                })
+              }
             } else if (parsed.type === 'tool_result') {
               // 工具结果，更新对应气泡
               const bubbleId = parsed.bubble_id
