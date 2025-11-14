@@ -524,49 +524,62 @@ const renderChatHistory = (history: any[]) => {
   // 跳过系统消息，只显示用户和助手的消息
   for (let i = 1; i < history.length; i++) {
     const message = history[i]
-    if (message && message.role && message.content) {
-      // 判断是否为工具相关消息
-      let messageType = ''
+    if (message && message.role) {
+      // 如果消息有reasoning_content字段，先添加思考过程
+      if (message.reasoning_content && message.reasoning_content.trim()) {
+        messages.value.push({
+          role: 'assistant',
+          content: message.reasoning_content,
+          messageType: 'thinking_complete',
+          collapsed: true
+        })
+      }
       
-      // 检查是否为工具消息 - 支持多种可能的role值和内容特征
-      if (message.role === 'tool') {
-        // 检查是否为图片生成工具
-        if (message.name === 'generate_image') {
-          messageType = 'image_result'
-        } else {
-          // 其他工具消息使用绿色样式
-          messageType = 'tool_result'
+      // 如果消息有content字段，继续处理主要内容
+      if (message.content) {
+        // 判断是否为工具相关消息
+        let messageType = ''
+        
+        // 检查是否为工具消息 - 支持多种可能的role值和内容特征
+        if (message.role === 'tool') {
+          // 检查是否为图片生成工具
+          if (message.name === 'generate_image') {
+            messageType = 'image_result'
+          } else {
+            // 其他工具消息使用绿色样式
+            messageType = 'tool_result'
+          }
+        } else if (message.role === 'assistant' && message.messageType === 'thinking') {
+          // 思考中的消息
+          messageType = 'thinking'
+        } else if (message.role === 'assistant' && message.messageType === 'thinking_complete') {
+          // 思考完成的消息
+          messageType = 'thinking_complete'
+        } else if (message.role === 'assistant' && message.content.includes('🔍 正在使用工具:')) {
+          // 工具开始消息
+          messageType = 'tool_start'
+        } else if (message.role === 'assistant' && message.content.includes('✅ 工具执行完成')) {
+          // 工具完成消息
+          messageType = 'tool_complete'
+        } else if (message.role === 'assistant') {
+          // 普通助手消息
+          messageType = 'content'
         }
-      } else if (message.role === 'assistant' && message.messageType === 'thinking') {
-        // 思考中的消息
-        messageType = 'thinking'
-      } else if (message.role === 'assistant' && message.messageType === 'thinking_complete') {
-        // 思考完成的消息
-        messageType = 'thinking_complete'
-      } else if (message.role === 'assistant' && message.content.includes('🔍 正在使用工具:')) {
-        // 工具开始消息
-        messageType = 'tool_start'
-      } else if (message.role === 'assistant' && message.content.includes('✅ 工具执行完成')) {
-        // 工具完成消息
-        messageType = 'tool_complete'
-      } else if (message.role === 'assistant') {
-        // 普通助手消息
-        messageType = 'content'
+        
+        // 如果是工具结果消息，解析文章数据
+        let articles: ArticleInfo[] = []
+        if (messageType === 'tool_result' && message.content.includes('找到') && message.content.includes('篇相关文章') && message.content.includes('<a href=')) {
+          articles = parseArticles(message.content)
+        }
+        
+        messages.value.push({
+          role: message.role,
+          content: message.content,
+          messageType: messageType,
+          articles: articles,
+          collapsed: (messageType === 'thinking' || messageType === 'thinking_complete') ? true : undefined
+        })
       }
-      
-      // 如果是工具结果消息，解析文章数据
-      let articles: ArticleInfo[] = []
-      if (messageType === 'tool_result' && message.content.includes('找到') && message.content.includes('篇相关文章') && message.content.includes('<a href=')) {
-        articles = parseArticles(message.content)
-      }
-      
-      messages.value.push({
-        role: message.role,
-        content: message.content,
-        messageType: messageType,
-        articles: articles,
-        collapsed: (messageType === 'thinking' || messageType === 'thinking_complete') ? true : undefined
-      })
     }
   }
 }

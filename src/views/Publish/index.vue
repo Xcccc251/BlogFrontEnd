@@ -567,6 +567,17 @@ const selectAgentSession = async (sessionId: string) => {
             summary: msg.summary || undefined
           })
         } else if (msg.role === 'assistant') {
+          // 如果消息有reasoning_content字段，先添加思考过程
+          if (msg.reasoning_content && msg.reasoning_content.trim()) {
+            processedMessages.push({
+              role: 'assistant',
+              content: msg.reasoning_content,
+              messageType: 'thinking_complete',
+              collapsed: true
+            })
+          }
+          
+
           // 检查是否有tool_calls
           if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
             // 为每个tool_call创建tool_start消息
@@ -831,7 +842,51 @@ const sendAiStreamMessage = async (message: string) => {
             }
             
             // 处理不同类型的消息
-            if (parsed.type === 'tool_start') {
+            if (parsed.type === 'thinking_start') {
+              // 思考开始，创建新的思考气泡
+              const bubbleId = parsed.bubble_id
+              bubbleContents.set(bubbleId, '')
+              
+              aiMessages.value.push({
+                role: 'assistant',
+                content: '',
+                bubbleId: bubbleId,
+                messageType: 'thinking',
+                collapsed: false
+              })
+            } else if (parsed.type === 'thinking') {
+              // 思考内容，逐步更新思考气泡
+              const bubbleId = parsed.bubble_id
+              
+              // 如果bubbleContents中不存在，说明没有收到thinking_start，需要初始化
+              if (!bubbleContents.has(bubbleId)) {
+                bubbleContents.set(bubbleId, '')
+                aiMessages.value.push({
+                  role: 'assistant',
+                  content: '',
+                  bubbleId: bubbleId,
+                  messageType: 'thinking',
+                  collapsed: false
+                })
+              }
+              
+              bubbleContents.set(bubbleId, bubbleContents.get(bubbleId)! + parsed.content)
+              
+              // 找到对应的消息并更新
+              const messageIndex = aiMessages.value.findIndex((msg: any) => msg.bubbleId === bubbleId)
+              if (messageIndex !== -1) {
+                aiMessages.value[messageIndex].content = bubbleContents.get(bubbleId)!
+              }
+            } else if (parsed.type === 'thinking_end') {
+              // 思考结束，收起思考气泡
+              const bubbleId = parsed.bubble_id
+              const messageIndex = aiMessages.value.findIndex((msg: any) => msg.bubbleId === bubbleId)
+              if (messageIndex !== -1) {
+                // 标记为已完成并收起
+                aiMessages.value[messageIndex].messageType = 'thinking_complete'
+                aiMessages.value[messageIndex].collapsed = true
+              }
+            } else if (parsed.type === 'tool_start') {
               // 工具开始，创建新的气泡
               const bubbleId = parsed.bubble_id
               bubbleContents.set(bubbleId, '')
@@ -1213,6 +1268,10 @@ const formatAiMessage = (content: string) => {
 // 获取消息类型样式类
 const getMessageTypeClass = (messageType?: string) => {
   switch (messageType) {
+    case 'thinking':
+      return 'thinking-message'
+    case 'thinking_complete':
+      return 'thinking-complete-message'
     case 'tool_start':
       return 'tool-start-message'
     case 'tool_result':
@@ -1223,6 +1282,13 @@ const getMessageTypeClass = (messageType?: string) => {
       return 'content-message'
     default:
       return ''
+  }
+}
+
+// 切换thinking消息的展开/收起状态
+const toggleThinkingCollapse = (index: number) => {
+  if (aiMessages.value[index]) {
+    aiMessages.value[index].collapsed = !aiMessages.value[index].collapsed
   }
 }
 
@@ -1807,8 +1873,22 @@ const stopDrag = () => {
           class="ai-message"
           :class="[`${message.role}-message`, getMessageTypeClass(message.messageType)]"
         >
+          <!-- 如果是思考消息，显示可折叠的思考内容 -->
+          <div v-if="message.messageType === 'thinking' || message.messageType === 'thinking_complete'" class="thinking-wrapper">
+            <div class="thinking-header" @click="toggleThinkingCollapse(index)">
+              <span class="thinking-title">Thinking ...</span>
+              <span class="thinking-toggle">
+                <el-icon :class="{ 'rotate': !message.collapsed }">
+                  <ArrowRight />
+                </el-icon>
+              </span>
+            </div>
+            <transition name="thinking-expand">
+              <div v-show="!message.collapsed" class="thinking-content" v-html="formatAiMessage(message.content)"></div>
+            </transition>
+          </div>
           <!-- 工具消息使用欢迎消息样式 -->
-          <div v-if="message.messageType === 'tool_start' || message.messageType === 'tool_complete'" class="welcome-message">
+          <div v-else-if="message.messageType === 'tool_start' || message.messageType === 'tool_complete'" class="welcome-message">
             <div class="feature-tip">
               <div v-if="message.messageType === 'tool_start'" class="tool-status">
                 <el-icon class="is-loading"><Loading /></el-icon>
@@ -2522,6 +2602,129 @@ const stopDrag = () => {
   color: #333333;
   border: 1px solid #e5e5e5;
   border-radius: 18px;
+}
+
+/* 思考消息样式 */
+.thinking-message,
+.thinking-complete-message {
+  justify-content: flex-start;
+  width: 100%;
+  
+  .ai-message-content {
+    background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+    border: 1px solid #fbbf24;
+    color: #78350f;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+    position: relative;
+    padding: 0;
+    overflow: hidden;
+    max-width: 85%;
+  }
+}
+
+.thinking-wrapper {
+  width: 100%;
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 12px 45px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+  position: relative;
+  
+  &:hover {
+    background: rgba(251, 191, 36, 0.1);
+  }
+  
+  &::before {
+    content: '💭';
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.2rem;
+  }
+}
+
+.thinking-title {
+  font-weight: 500;
+  font-style: normal;
+  font-size: 0.95rem;
+}
+
+.thinking-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+  
+  .el-icon {
+    transition: transform 0.3s ease;
+    
+    &.rotate {
+      transform: rotate(90deg);
+    }
+  }
+}
+
+.thinking-content {
+  padding: 0 16px 16px 45px;
+  font-style: italic;
+  line-height: 1.6;
+  overflow: hidden;
+}
+
+/* Transition动画 */
+.thinking-expand-enter-active {
+  transition: all 0.3s ease;
+  max-height: 1000px;
+}
+
+.thinking-expand-leave-active {
+  transition: all 0.3s ease;
+  max-height: 1000px;
+}
+
+.thinking-expand-enter-from {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.thinking-expand-enter-to {
+  opacity: 1;
+  max-height: 1000px;
+}
+
+.thinking-expand-leave-from {
+  opacity: 1;
+  max-height: 1000px;
+}
+
+.thinking-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.thinking-message .ai-message-content {
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(251, 191, 36, 0.4);
+  }
 }
 
 /* 工具消息样式 */
