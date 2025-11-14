@@ -152,8 +152,20 @@
           :class="[`${message.role}-message`, getMessageTypeClass(message.messageType)]"
         >
           <div class="message-content">
+            <!-- 如果是思考消息，显示可折叠的思考内容 -->
+            <div v-if="message.messageType === 'thinking' || message.messageType === 'thinking_complete'" class="thinking-wrapper">
+              <div class="thinking-header" @click="toggleThinkingCollapse(index)">
+                <span class="thinking-title">Thinking ...</span>
+                <span class="thinking-toggle">
+                  <el-icon :class="{ 'rotate': !message.collapsed }">
+                    <ArrowRight />
+                  </el-icon>
+                </span>
+              </div>
+              <div v-show="!message.collapsed" class="thinking-content" v-html="formatMessage(message.content)"></div>
+            </div>
             <!-- 如果是图片生成工具结果，显示图片 -->
-            <div v-if="message.messageType === 'image_result'" class="image-container">
+            <div v-else-if="message.messageType === 'image_result'" class="image-container">
               <div class="image-header">
                 <h4>生成的图片</h4>
               </div>
@@ -322,6 +334,7 @@ interface ChatMessage {
   articles?: ArticleInfo[]
   name?: string
   tool_call_id?: string
+  collapsed?: boolean
 }
 
 interface ArticleInfo {
@@ -522,6 +535,12 @@ const renderChatHistory = (history: any[]) => {
           // 其他工具消息使用绿色样式
           messageType = 'tool_result'
         }
+      } else if (message.role === 'assistant' && message.messageType === 'thinking') {
+        // 思考中的消息
+        messageType = 'thinking'
+      } else if (message.role === 'assistant' && message.messageType === 'thinking_complete') {
+        // 思考完成的消息
+        messageType = 'thinking_complete'
       } else if (message.role === 'assistant' && message.content.includes('🔍 正在使用工具:')) {
         // 工具开始消息
         messageType = 'tool_start'
@@ -543,7 +562,8 @@ const renderChatHistory = (history: any[]) => {
         role: message.role,
         content: message.content,
         messageType: messageType,
-        articles: articles
+        articles: articles,
+        collapsed: (messageType === 'thinking' || messageType === 'thinking_complete') ? true : undefined
       })
     }
   }
@@ -624,7 +644,50 @@ const sendStreamMessage = async (message: string) => {
             }
             
             // 处理不同类型的消息
-            if (parsed.type === 'tool_start') {
+            if (parsed.type === 'thinking_start') {
+              // 思考开始，创建新的思考气泡
+              const bubbleId = parsed.bubble_id
+              bubbleContents.set(bubbleId, '')
+              
+              messages.value.push({
+                role: 'assistant',
+                content: '',
+                bubbleId: bubbleId,
+                messageType: 'thinking',
+                collapsed: true
+              })
+            } else if (parsed.type === 'thinking') {
+              // 思考内容，逐步更新思考气泡
+              const bubbleId = parsed.bubble_id
+              
+              // 如果bubbleContents中不存在，说明没有收到thinking_start，需要初始化
+              if (!bubbleContents.has(bubbleId)) {
+                bubbleContents.set(bubbleId, '')
+                messages.value.push({
+                  role: 'assistant',
+                  content: '',
+                  bubbleId: bubbleId,
+                  messageType: 'thinking',
+                  collapsed: true
+                })
+              }
+              
+              bubbleContents.set(bubbleId, bubbleContents.get(bubbleId)! + parsed.content)
+              
+              // 找到对应的消息并更新
+              const messageIndex = messages.value.findIndex((msg: ChatMessage) => msg.bubbleId === bubbleId)
+              if (messageIndex !== -1) {
+                messages.value[messageIndex].content = bubbleContents.get(bubbleId)!
+              }
+            } else if (parsed.type === 'thinking_end') {
+              // 思考结束，保持thinking类型
+              const bubbleId = parsed.bubble_id
+              const messageIndex = messages.value.findIndex((msg: ChatMessage) => msg.bubbleId === bubbleId)
+              if (messageIndex !== -1) {
+                // 保持thinking类型，标记为已完成
+                messages.value[messageIndex].messageType = 'thinking_complete'
+              }
+            } else if (parsed.type === 'tool_start') {
               // 工具开始，创建新的气泡
               const bubbleId = parsed.bubble_id
               bubbleContents.set(bubbleId, '')
@@ -995,6 +1058,10 @@ const formatTime = (timeString: string) => {
 // 获取消息类型样式类
 const getMessageTypeClass = (messageType?: string) => {
   switch (messageType) {
+    case 'thinking':
+      return 'thinking-message'
+    case 'thinking_complete':
+      return 'thinking-complete-message'
     case 'tool_start':
       return 'tool-start-message'
     case 'tool_result':
@@ -1158,6 +1225,13 @@ const handleGeneratedImageLoad = (event: Event) => {
 // 在新标签页中打开图片
 const openImageInNewTab = (imageUrl: string) => {
   window.open(imageUrl, '_blank')
+}
+
+// 切换thinking消息的展开/收起状态
+const toggleThinkingCollapse = (index: number) => {
+  if (messages.value[index]) {
+    messages.value[index].collapsed = !messages.value[index].collapsed
+  }
 }
 </script>
 
@@ -1624,6 +1698,98 @@ const openImageInNewTab = (imageUrl: string) => {
 }
 
 /* 不同类型消息的样式 */
+.thinking-message .message-content,
+.thinking-complete-message .message-content {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  border: 1px solid #fbbf24;
+  color: #78350f;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+  position: relative;
+  padding: 0;
+  overflow: hidden;
+}
+
+.thinking-wrapper {
+  width: 100%;
+}
+
+.thinking-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px 12px 45px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+  position: relative;
+  
+  &:hover {
+    background: rgba(251, 191, 36, 0.1);
+  }
+  
+  &::before {
+    content: '💭';
+    position: absolute;
+    left: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 1.2rem;
+  }
+}
+
+.thinking-title {
+  font-weight: 500;
+  font-style: normal;
+  font-size: 0.95rem;
+}
+
+.thinking-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+  
+  .el-icon {
+    transition: transform 0.3s ease;
+    
+    &.rotate {
+      transform: rotate(90deg);
+    }
+  }
+}
+
+.thinking-content {
+  padding: 0 16px 16px 45px;
+  font-style: italic;
+  line-height: 1.6;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+  }
+}
+
+.thinking-message .message-content {
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes thinking-pulse {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(251, 191, 36, 0.2);
+  }
+  50% {
+    box-shadow: 0 4px 16px rgba(251, 191, 36, 0.4);
+  }
+}
+
 .tool-start-message .message-content {
   background: #f8f9fa;
   border: 1px solid #e3f2fd;
