@@ -56,7 +56,7 @@ export const chatAPI = {
 
 export const agentAPI = {
   // 发送消息（流式响应）
-  sendMessage(articleInfo:string, userMessage: string, articleContent: string, sessionId: string | null, type: string) {
+  sendMessage(articleInfo:string, userMessage: string, articleContent: string, sessionId: string | null, type: string, model: string) {
     return fetch('/api/agent/chat', {
       method: 'POST',
       headers: {
@@ -67,7 +67,8 @@ export const agentAPI = {
         article_content: articleContent,
         user_message: userMessage,
         type: type,
-        session_id: sessionId
+        session_id: sessionId,
+        model: model
       })
     })
   },  
@@ -104,6 +105,11 @@ export const agentAPI = {
       article_category: articleCategory,
       article_tags: JSON.stringify(articleTagArray)
     })
+  },
+
+  // 获取可用模型列表
+  getModels() {
+    return api.get('/agent/models')
   },
 }
 

@@ -70,6 +70,11 @@ const aiMode = ref('agent') // 默认使用agent模式
 const showModeDropdown = ref(false) // 控制下拉框显示
 const currentSessionId = ref<string | null>(null)
 
+// 模型选择相关
+const availableModels = ref<any[]>([])
+const selectedModel = ref('gemini_flash')
+const showModelDropdown = ref(false)
+
 // 自动保存相关
 const isSaving = ref(false)
 const autoSaveError = ref<string | null>(null)
@@ -197,6 +202,7 @@ onMounted(async () => {
   getFormData()
   await getCategory()
   await getTag()
+  await loadModels()
   await loadAgentSessions(true) // 传入true表示自动选择第一个会话
   
   // 添加点击外部关闭下拉框的事件监听
@@ -515,6 +521,24 @@ const createNewSession = async () => {
   }
 }
 
+// 加载可用模型
+const loadModels = async () => {
+  try {
+    const response = await agentAPI.getModels()
+    if (response.data.success) {
+      availableModels.value = response.data.models
+      // 如果当前选择的模型不在列表中，选择第一个
+      if (!availableModels.value.some((m: any) => m.model === selectedModel.value)) {
+        selectedModel.value = availableModels.value[0]?.model || 'gemini_flash'
+      }
+    } else {
+      ElMessage.error('加载模型失败: ' + response.data.error)
+    }
+  } catch (error: any) {
+    ElMessage.error('网络错误: ' + (error.message || error))
+  }
+}
+
 // 加载会话列表（Agent）
 const loadAgentSessions = async (autoSelectFirst = false) => {
   try {
@@ -802,7 +826,7 @@ const sendAiStreamMessage = async (message: string) => {
   // 优先使用diffContent，如果不存在则使用原始articleContent
   const currentContent = diffContent.value || formData.value.articleContent || ''
   
-  const response = await agentAPI.sendMessage(articleInfo, message, currentContent, currentSessionId.value, aiMode.value)
+  const response = await agentAPI.sendMessage(articleInfo, message, currentContent, currentSessionId.value, aiMode.value, selectedModel.value)
   
   if (!response.ok) {
     throw new Error('HTTP ' + response.status)
@@ -1311,9 +1335,40 @@ const selectMode = (mode: string) => {
 // 点击外部关闭下拉框
 const handleClickOutside = (event: Event) => {
   const target = event.target as HTMLElement
-  if (!target.closest('.mode-selector')) {
+  if (!target.closest('.mode-selector') && !target.closest('.model-selector')) {
     showModeDropdown.value = false
+    showModelDropdown.value = false
   }
+}
+
+// Model选择相关方法
+const toggleModelDropdown = () => {
+  showModelDropdown.value = !showModelDropdown.value
+}
+
+const selectModel = (model: string) => {
+  selectedModel.value = model
+  showModelDropdown.value = false
+}
+
+// 获取当前选中模型的显示名称
+const getSelectedModelName = () => {
+  const modelInfo = availableModels.value.find((m: any) => m.model === selectedModel.value)
+  return modelInfo?.model_name || selectedModel.value
+}
+
+// 获取当前选中模型的图标
+const getSelectedModelIcon = () => {
+  const modelInfo = availableModels.value.find((m: any) => m.model === selectedModel.value)
+  return modelInfo?.icon_url || ''
+}
+
+// 处理图标加载错误
+const handleIconError = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  console.log('图标加载失败:', img.src)
+  // 显示默认机器人图标
+  img.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMTAiIGN5PSIxMCIgcj0iOCIgZmlsbD0iIzY2NjY2NiIvPgo8Y2lyY2xlIGN4PSI3IiBjeT0iOCIgcj0iMSIgZmlsbD0id2hpdGUiLz4KPGNpcmNsZSBjeD0iMTMiIGN5PSI4IiByPSIxIiBmaWxsPSJ3aGl0ZSIvPgo8cGF0aCBkPSJNNyAxM0M3IDEzIDguNSAxNCAxMCAxNFMxMyAxMyAxMyAxMyIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K'
 }
 
 // Diff测试相关方法
@@ -1837,20 +1892,32 @@ const stopDrag = () => {
       <div class="ai-assistant-section" :style="{ width: (100 - leftPanelWidth) + '%' }">
       <div class="ai-header">
         <div class="ai-title-section">
-            <div class="mode-selector">
-              <div class="mode-dropdown" @click="toggleModeDropdown" :class="{ active: showModeDropdown }">
-                <span class="mode-icon">{{ aiMode === 'agent' ? '∞' : '💬' }}</span>
-                <span class="mode-text">{{ aiMode === 'agent' ? 'Agent' : 'Ask' }}</span>
-                <i class="fas fa-chevron-down mode-arrow"></i>
+            <div class="model-selector">
+              <div class="model-dropdown" @click="toggleModelDropdown" :class="{ active: showModelDropdown }">
+                <img 
+                  :src="getSelectedModelIcon()" 
+                  :alt="getSelectedModelName()"
+                  class="model-icon"
+                  @error="handleIconError"
+                />
+                <span class="model-text">{{ getSelectedModelName() }}</span>
+                <i class="fas fa-chevron-down model-arrow"></i>
               </div>
-              <div class="mode-options" v-show="showModeDropdown">
-                <div class="mode-option" @click="selectMode('agent')" :class="{ active: aiMode === 'agent' }">
-                  <span class="option-icon">∞</span>
-                  <span class="option-text">Agent</span>
-                </div>
-                <div class="mode-option" @click="selectMode('ask')" :class="{ active: aiMode === 'ask' }">
-                  <span class="option-icon">💬</span>
-                  <span class="option-text">Ask</span>
+              <div class="model-options" v-show="showModelDropdown">
+                <div 
+                  v-for="modelInfo in availableModels" 
+                  :key="modelInfo.model"
+                  class="model-option" 
+                  @click="selectModel(modelInfo.model)" 
+                  :class="{ active: selectedModel === modelInfo.model }"
+                >
+                  <img 
+                    :src="modelInfo.icon_url" 
+                    :alt="modelInfo.model_name"
+                    class="option-icon"
+                    @error="handleIconError"
+                  />
+                  <span class="option-text">{{ modelInfo.model_name }}</span>
                 </div>
               </div>
             </div>
@@ -1910,6 +1977,24 @@ const stopDrag = () => {
 
       <div class="ai-chat-input-container">
         <div class="ai-input-wrapper">
+          <div class="mode-selector">
+            <div class="mode-dropdown" @click="toggleModeDropdown" :class="{ active: showModeDropdown }">
+              <span class="mode-icon">{{ aiMode === 'agent' ? '∞' : '💬' }}</span>
+              <span class="mode-text">{{ aiMode === 'agent' ? 'Agent' : 'Ask' }}</span>
+              <i class="fas fa-chevron-down mode-arrow"></i>
+            </div>
+            <div class="mode-options" v-show="showModeDropdown">
+              <div class="mode-option" @click="selectMode('agent')" :class="{ active: aiMode === 'agent' }">
+                <span class="option-icon">∞</span>
+                <span class="option-text">Agent</span>
+              </div>
+              <div class="mode-option" @click="selectMode('ask')" :class="{ active: aiMode === 'ask' }">
+                <span class="option-icon">💬</span>
+                <span class="option-text">Ask</span>
+              </div>
+            </div>
+          </div>
+          
           <textarea 
             ref="aiMessageInput"
             v-model="aiInputMessage"
@@ -2402,34 +2487,37 @@ const stopDrag = () => {
   }
 }
 
-// 自定义模式选择器样式
-.mode-selector {
+// 自定义模式选择器样式（在输入框左侧）
+.ai-input-wrapper .mode-selector {
   position: relative;
-  margin-left: 0px;
+  margin-right: 12px;
+  flex-shrink: 0;
 }
 
-.mode-dropdown {
+.ai-input-wrapper .mode-dropdown {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 8px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
+  padding: 8px 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 20px;
+  background: #f8f9fa;
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 100px;
   
   &:hover {
-    background: #f8f9fa;
+    background: #e9ecef;
+    border-color: #007bff;
   }
   
   &.active {
-    background: #f0f8ff;
+    background: #e3f2fd;
+    border-color: #007bff;
   }
 }
 
-.mode-icon {
+.ai-input-wrapper .mode-icon {
   font-size: 1.1rem;
   font-weight: normal;
   display: flex;
@@ -2438,45 +2526,46 @@ const stopDrag = () => {
   width: 20px;
 }
 
-.mode-text {
-  font-size: 1.2rem;
+.ai-input-wrapper .mode-text {
+  font-size: 0.9rem;
   font-weight: 500;
-  color: #303133;
+  color: #333333;
+  white-space: nowrap;
 }
 
-.mode-arrow {
+.ai-input-wrapper .mode-arrow {
   font-size: 0.8rem;
   color: #666;
   transition: transform 0.2s ease;
 }
 
-.mode-dropdown.active .mode-arrow {
+.ai-input-wrapper .mode-dropdown.active .mode-arrow {
   transform: rotate(180deg);
 }
 
-.mode-options {
+.ai-input-wrapper .mode-options {
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 0;
   right: 0;
   background: white;
   border: 1px solid #e5e5e5;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
   z-index: 1000;
-  margin-top: 2px;
+  margin-bottom: 4px;
   overflow: hidden;
 }
 
-.mode-option {
+.ai-input-wrapper .mode-option {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 10px 12px;
   cursor: pointer;
   transition: background-color 0.2s ease;
   font-size: 0.9rem;
-  color: #303133;
+  color: #333333;
   
   &:hover {
     background: #f8f9fa;
@@ -2493,7 +2582,7 @@ const stopDrag = () => {
   }
 }
 
-.option-icon {
+.ai-input-wrapper .option-icon {
   font-size: 1rem;
   display: flex;
   align-items: center;
@@ -2501,8 +2590,112 @@ const stopDrag = () => {
   width: 18px;
 }
 
-.option-text {
+.ai-input-wrapper .option-text {
   font-weight: 500;
+}
+
+// Model选择器样式
+.model-selector {
+  position: relative;
+  margin-left: 12px;
+  flex-shrink: 0;
+}
+
+.model-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 20px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 120px;
+  
+  &:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+  }
+  
+  &.active {
+    background: #e3f2fd;
+    border-color: #007bff;
+  }
+}
+
+.model-icon {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.model-text {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #333333;
+  white-space: nowrap;
+}
+
+.model-arrow {
+  font-size: 0.8rem;
+  color: #666;
+  transition: transform 0.2s ease;
+}
+
+.model-dropdown.active .model-arrow {
+  transform: rotate(180deg);
+}
+
+.model-options {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.9rem;
+  color: #333333;
+  
+  &:hover {
+    background: #f8f9fa;
+  }
+  
+  &.active {
+    background: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+  }
+  
+  &:not(:last-child) {
+    border-bottom: 1px solid #f0f0f0;
+  }
+  
+  .option-icon {
+    width: 18px;
+    height: 18px;
+    object-fit: contain;
+    flex-shrink: 0;
+  }
+  
+  .option-text {
+    font-weight: 500;
+  }
 }
 
 .ai-chat-messages {
@@ -2818,10 +3011,13 @@ const stopDrag = () => {
 .ai-input-wrapper {
   position: relative;
   max-width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0;
 }
 
 .ai-message-input {
-  width: 100%;
+  flex: 1;
   border: 1px solid #e5e5e5;
   border-radius: 30px;
   padding: 12px 50px 12px 16px;
@@ -2836,6 +3032,7 @@ const stopDrag = () => {
   background: #f8f9fa;
   box-sizing: border-box;
   overflow: hidden;
+  position: relative;
   
   &:focus {
     border-color: #007bff;
@@ -2851,7 +3048,7 @@ const stopDrag = () => {
 .ai-send-btn {
   position: absolute;
   right: 8px;
-  top: 45%;
+  top: 50%;
   transform: translateY(-50%);
   background: #007bff;
   color: white;
