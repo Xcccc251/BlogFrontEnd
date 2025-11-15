@@ -2,7 +2,7 @@
 import { nextTick } from 'vue'
 import CustomMarkdownEditor from '@/components/CustomMarkdownEditor/index.vue'
 import { ElMessage } from 'element-plus'
-import { Loading, Check, Delete, Edit, ArrowLeft, ArrowRight, ChatLineSquare } from '@element-plus/icons-vue'
+import { Loading, Check, Close, Delete, Edit, ArrowLeft, ArrowRight, ChatLineSquare } from '@element-plus/icons-vue'
 import { useColorMode } from '@vueuse/core'
 import { 
   addCategory, 
@@ -16,6 +16,7 @@ import {
 } from '@/apis/article'
 import { agentAPI } from '@/apis/aiChat'
 import type { CategoryType, TagType } from './type'
+import doneSound from '@/assets/sounds/done1.mp3'
 
 const route = useRoute()
 const router = useRouter()
@@ -640,12 +641,23 @@ const selectAgentSession = async (sessionId: string) => {
           
           if (toolStartIndex !== -1) {
             // 解析tool结果
+            let isSuccess = true
             let summary = ''
             try {
-              const toolData = JSON.parse(msg.content)
-              summary = toolData.summary || ''
+              if (msg.name === 'read_article'){
+                summary = "READ"
+              }else if (msg.name === 'edit_article' || msg.name === 'edit_article_batch'){
+                const toolData = JSON.parse(msg.content)
+                summary = "EDIT: " + toolData.summary || ''
+              } else if (msg.name === 'get_categories' || msg.name === 'get_tags') {
+                summary = 'GET: ' + msg.content
+              }else{
+                const toolData = JSON.parse(msg.content)
+                summary = "UPDATE: " + toolData.summary || ''
+              }
             } catch (e) {
-              summary = `工具 ${msg.name} 执行完成`
+              isSuccess = false
+              summary = `ERROR:` + msg.content
             }
             
             processedMessages[toolStartIndex] = {
@@ -654,7 +666,8 @@ const selectAgentSession = async (sessionId: string) => {
               bubbleId: bubbleId,
               messageType: 'tool_complete',
               name: msg.name,
-              summary: summary
+              summary: summary,
+              success: isSuccess
             }
           }
         }
@@ -815,6 +828,22 @@ const sendAiMessage = async (message: string) => {
     })
   } finally {
     isAiTyping.value = false
+    // 播放完成音效
+    try {
+      const audio = new Audio(doneSound)
+      audio.currentTime = 0 // 确保从头开始播放
+      audio.volume = 0.7 // 设置音量为70%
+      // 等待音频可以播放后再开始
+      audio.addEventListener('canplaythrough', () => {
+        audio.play().catch(err => {
+          console.warn('播放音效失败:', err)
+        })
+      }, { once: true })
+      // 立即加载音频
+      audio.load()
+    } catch (err) {
+      console.warn('创建音效对象失败:', err)
+    }
   }
 }
 
@@ -994,6 +1023,26 @@ const sendAiStreamMessage = async (message: string) => {
                 console.warn('解析 update_tags 工具数据失败:', e, '原始内容:', content)
               }
             }
+
+            // 处理 edit_article 工具（内容匹配编辑）
+            if (parsed.name === 'edit_article' || parsed.name === 'edit_article_batch') {
+              try {
+                const toolData = JSON.parse(content)
+                if (toolData.success && toolData.updated_content) {
+                  // 保存当前内容用于撤销
+                  prevContent.value = formData.value.articleContent || ''
+                  // 设置新内容用于diff显示
+                  diffContent.value = toolData.updated_content
+                  // 强制重新初始化差异统计
+                  showDiff.value = false
+                  nextTick(() => {
+                    showDiff.value = true
+                  })
+                }
+              } catch (e) {
+                console.warn(`解析 ${parsed.name} 工具数据失败:`, e, '原始内容:', content)
+              }
+            }
                   
                   if (parsed.name === 'update_content_by_line_number'){
                     try {
@@ -1165,16 +1214,33 @@ const sendAiStreamMessage = async (message: string) => {
                   aiMessages.value[messageIndex].messageType = 'tool_complete'
                   // 解析工具返回的汇总信息 summary（如果有）
                   const content = bubbleContents.get(bubbleId)
+                  const toolName = aiMessages.value[messageIndex].name
+                  let isSuccess = true
                   if (content) {
                     try {
-                      const toolData = JSON.parse(content)
-                      if (toolData && typeof toolData.summary === 'string' && toolData.summary.trim()) {
-                        aiMessages.value[messageIndex].summary = toolData.summary
+                      // 根据工具类型添加前缀，与历史消息保持一致
+                      let summary = ''
+                      if (toolName === 'read_article') {
+                        summary = 'READ'
+                      } else if (toolName === 'edit_article' || toolName === 'edit_article_batch') {
+                        const toolData = JSON.parse(content)
+                        summary = 'EDIT: ' + (toolData.summary || '')
+                      } else if (toolName === 'get_categories' || toolName === 'get_tags') {
+                        summary = 'GET: ' + content
+                      }else {
+                        const toolData = JSON.parse(content)
+                        summary = 'UPDATE: ' + (toolData.summary || '')
+                      }
+                      if (summary.trim()) {
+                        aiMessages.value[messageIndex].summary = summary
                       }
                     } catch (err) {
-                      // 忽略无法解析的情况
+                      // 解析失败时设置错误信息
+                      isSuccess = false
+                      aiMessages.value[messageIndex].summary = 'ERROR:' + content
                     }
                   }
+                  aiMessages.value[messageIndex].success = isSuccess
                 }, 1500)
               }
             } else if (parsed.type === 'content') {
@@ -1285,6 +1351,16 @@ const formatAiMessage = (content: string) => {
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code>$1</code>')
     .replace(/\n/g, '<br>')
+  
+  return formatted
+}
+
+// 格式化工具summary，将前缀加粗
+const formatToolSummary = (summary: string) => {
+  if (!summary) return ''
+  
+  // 匹配前缀并加粗：UPDATE:、GET:、ERROR:、EDIT:、READ
+  const formatted = summary.replace(/^(UPDATE:|GET:|ERROR:|EDIT:|READ)(.*)$/, '<strong>$1</strong>$2')
   
   return formatted
 }
@@ -1959,12 +2035,12 @@ const stopDrag = () => {
             <div class="feature-tip">
               <div v-if="message.messageType === 'tool_start'" class="tool-status">
                 <el-icon class="is-loading"><Loading /></el-icon>
-                <span>正在处理...</span>
+                <span>Invocating Tools ...</span>
               </div>
-              <div v-else-if="message.messageType === 'tool_complete'" class="tool-status">
-                <el-icon class="check-icon"><Check /></el-icon>
-                <span>处理完成：</span>
-                <span v-if="message.summary">{{ message.summary }}</span>
+              <div v-else-if="message.messageType === 'tool_complete'" class="tool-status" :class="{ 'tool-success': message.success !== false, 'tool-error': message.success === false }">
+                <el-icon v-if="message.success !== false" class="check-icon"><Check /></el-icon>
+                <el-icon v-else class="error-icon"><Close /></el-icon>
+                <span v-if="message.summary" v-html="formatToolSummary(message.summary)"></span>
               </div>
             </div>
           </div>
@@ -2017,7 +2093,7 @@ const stopDrag = () => {
             <i class="fas fa-circle"></i>
             <i class="fas fa-circle"></i>
             <i class="fas fa-circle"></i>
-            AI正在回答...
+            Streaming ...
           </span>
         </div>
       </div>
@@ -2846,8 +2922,9 @@ const stopDrag = () => {
 
 .thinking-title {
   font-weight: 500;
-  font-style: normal;
+  font-style: italic;
   font-size: 0.95rem;
+  color: #666666;
 }
 
 .thinking-toggle {
@@ -2870,6 +2947,7 @@ const stopDrag = () => {
   font-style: italic;
   line-height: 1.6;
   overflow: hidden;
+  color: #666666;
 }
 
 /* Transition动画 */
@@ -2921,17 +2999,34 @@ const stopDrag = () => {
 }
 
 /* 工具消息样式 */
-.tool-start-message,
-.tool-complete-message {
-  justify-content: center;
+.tool-start-message {
+  justify-content: flex-start;
   width: 100%;
 }
 
-.tool-start-message .welcome-message,
-.tool-complete-message .welcome-message {
+.tool-complete-message {
+  justify-content: flex-start;
   width: 100%;
+}
+
+.tool-start-message .welcome-message {
+  width: fit-content;
   border-radius: 10px;
   margin: 0;
+}
+
+.tool-complete-message .welcome-message {
+  width: fit-content;
+  border-radius: 10px;
+  margin: 0;
+}
+
+.tool-start-message .feature-tip {
+  width: fit-content;
+}
+
+.tool-complete-message .feature-tip {
+  width: fit-content;
 }
 
 /* 工具状态样式 */
@@ -2942,6 +3037,7 @@ const stopDrag = () => {
   gap: 8px;
   font-size: 1rem;
   font-weight: 500;
+  font-style: italic;
   color: #666666;
 }
 
@@ -2951,6 +3047,7 @@ const stopDrag = () => {
 
 .tool-start-message .tool-status {
   color: #1976d2;
+  justify-content: flex-start;
 }
 
 .tool-complete-message .tool-status {
@@ -2975,6 +3072,37 @@ const stopDrag = () => {
     transform: scale(1);
     opacity: 1;
   }
+}
+
+/* 错误图标动画效果 */
+.error-icon {
+  animation: error-mark 0.6s ease-in-out;
+}
+
+@keyframes error-mark {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 工具状态颜色 */
+.tool-status.tool-success {
+  color: #10b981;
+  justify-content: flex-start;
+}
+
+.tool-status.tool-error {
+  color: #ef4444;
+  justify-content: flex-start;
 }
 
 /* 不同类型消息的样式 */
@@ -3253,3 +3381,4 @@ const stopDrag = () => {
   }
 }
 </style>
+

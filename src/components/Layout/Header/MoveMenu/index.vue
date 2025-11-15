@@ -8,7 +8,7 @@ import {
   HomeFilled,
   IceCreamRound,
   Link,
-  Postcard, PriceTag, UserFilled, ChatLineSquare
+  Postcard, PriceTag, UserFilled, ChatLineSquare, Connection, Edit
 } from "@element-plus/icons-vue";
 
 const emit = defineEmits(["update:closeDrawer"])
@@ -98,6 +98,18 @@ const env = import.meta.env
         <ChatLineSquare/>
       </el-icon>
       AI对话
+    </el-menu-item>
+    <el-menu-item index="/publish" @click="isClose">
+      <el-icon>
+        <Edit/>
+      </el-icon>
+      发布
+    </el-menu-item>
+    <el-menu-item index="/graph" @click="isClose">
+      <el-icon>
+        <Connection/>
+      </el-icon>
+      知识图谱
     </el-menu-item>
     
     <el-menu-item index="/about" @click="isClose">

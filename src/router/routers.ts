@@ -118,6 +118,15 @@ export const constantRouter = [
                     title: '发布文章',
                     requireAuth: true
                 }
+            },
+            // 知识图谱
+            {
+                path: '/graph',
+                component: () => import('@/views/Graph/index.vue'),
+                name: 'graph',
+                meta: {
+                    title: '知识图谱可视化',
+                }
             }
         ]
     },
