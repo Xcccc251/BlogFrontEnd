@@ -71,6 +71,12 @@ const nodeColorMap: Record<string, string> = {
   Tag: '#E86452',        // 红色
 }
 
+// 生成颜色的深色版本
+const getDarkerColor = (color: string): string => {
+  const c = d3.rgb(color)
+  return d3.rgb(c.r * 0.6, c.g * 0.6, c.b * 0.6).toString()
+}
+
 // 初始化图谱可视化
 const initGraph = () => {
   if (!graphContainer.value || !graphData.value) return
@@ -96,11 +102,11 @@ const initGraph = () => {
     
     return {
       id: node.id,
-      label: label.length > 15 ? label.substring(0, 15) + '...' : label,
+      label: label.length > 5 ? label.substring(0, 3) + '...' : label,
       fullLabel: label,
       type: nodeType,
       color: nodeColorMap[nodeType] || '#ccc',
-      size: Math.max(25, Math.min(50, 25 + (node.stats?.inDegree || 0) * 2)),
+      size: Math.max(60, Math.min(120, 60 + (node.stats?.inDegree || 0) * 3)),
       x: graphWidth / 2 + Math.random() * 100 - 50,
       y: graphHeight / 2 + Math.random() * 100 - 50,
     }
@@ -117,7 +123,7 @@ const initGraph = () => {
     .append('svg')
     .attr('width', graphWidth)
     .attr('height', graphHeight)
-    .style('background', '#fafafa')
+    .style('background', '#F0F8FF')
   
   // 添加缩放行为
   const g = svg.append('g')
@@ -131,19 +137,33 @@ const initGraph = () => {
   svg.call(zoom as any)
   
   // 定义箭头标记
-  svg.append('defs').selectAll('marker')
-    .data(['end'])
-    .enter().append('marker')
+  const defs = svg.append('defs')
+
+  // 普通箭头
+  defs.append('marker')
     .attr('id', 'arrow')
     .attr('viewBox', '0 -5 10 10')
-    .attr('refX', 20)
+    .attr('refX', 39)
     .attr('refY', 0)
-    .attr('markerWidth', 6)
-    .attr('markerHeight', 6)
+    .attr('markerWidth', 5)
+    .attr('markerHeight', 5)
     .attr('orient', 'auto')
     .append('path')
     .attr('d', 'M0,-5L10,0L0,5')
-    .attr('fill', '#000')
+    .attr('fill', '#999')
+
+  // 悬停时的箭头
+  defs.append('marker')
+    .attr('id', 'arrow-hover')
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 39)
+    .attr('refY', 0)
+    .attr('markerWidth', 5)
+    .attr('markerHeight', 5)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', '#999')
   
   // 计算圆形边界
   centerX = graphWidth / 2
@@ -163,7 +183,7 @@ const initGraph = () => {
   
   // 创建力导向模拟
   simulation = d3.forceSimulation(nodes)
-    .force('link', d3.forceLink(links).id((d: any) => d.id).distance(100))
+    .force('link', d3.forceLink(links).id((d: any) => d.id).distance(150))
     .force('charge', d3.forceManyBody().strength(-80))
     .force('center', d3.forceCenter(centerX, centerY))
     .force('collision', d3.forceCollide().radius((d: any) => d.size + 5).strength(0.7))
@@ -174,22 +194,44 @@ const initGraph = () => {
     .selectAll('line')
     .data(links)
     .enter().append('line')
-    .attr('stroke', '#000')
-    .attr('stroke-width', 1)
+    .attr('stroke', '#999')
+    .attr('stroke-width', 2)
     .attr('marker-end', 'url(#arrow)')
-    .style('opacity', 0.6)
-    .on('mouseenter', function(this: SVGLineElement) {
-      d3.select(this)
-        .attr('stroke', '#1890ff')
-        .attr('stroke-width', 2)
-        .style('opacity', 1)
-    })
-    .on('mouseleave', function(this: SVGLineElement) {
-      d3.select(this)
-        .attr('stroke', '#000')
-        .attr('stroke-width', 1)
-        .style('opacity', 0.6)
-    })
+    .style('opacity', 1)
+  
+  // 绘制边标签
+  const linkLabel = g.append('g')
+    .attr('class', 'link-labels')
+    .selectAll('g')
+    .data(links)
+    .enter().append('g')
+  
+  // 边标签背景
+  linkLabel.append('rect')
+    .attr('fill', '#fff')
+    .attr('stroke', '#ddd')
+    .attr('stroke-width', 1)
+    .attr('rx', 3)
+    .attr('ry', 3)
+    .style('pointer-events', 'none')
+  
+  // 边标签文字
+  linkLabel.append('text')
+    .attr('text-anchor', 'middle')
+    .attr('dy', '0.35em')
+    .style('font-size', '11px')
+    .style('fill', '#666')
+    .style('pointer-events', 'none')
+    .text((d: any) => d.label)
+  
+  // 计算并设置背景矩形大小
+  linkLabel.each(function(this: SVGGElement) {
+    const text = d3.select(this).select('text').node() as SVGTextElement
+    const bbox = text.getBBox()
+    d3.select(this).select('rect')
+      .attr('width', bbox.width + 8)
+      .attr('height', bbox.height + 4)
+  })
   
   // 绘制节点组
   const node = g.append('g')
@@ -206,8 +248,8 @@ const initGraph = () => {
   node.append('circle')
     .attr('r', (d: any) => d.size / 2)
     .attr('fill', (d: any) => d.color)
-    .attr('stroke', (d: any) => d.color)
-    .attr('stroke-width', 2)
+    .attr('stroke', (d: any) => getDarkerColor(d.color))
+    .attr('stroke-width', 3)
     .on('mouseenter', function(this: SVGCircleElement, event: MouseEvent, d: any) {
       d3.select(this)
         .attr('stroke', '#1890ff')
@@ -223,8 +265,8 @@ const initGraph = () => {
     .on('mouseleave', function(this: SVGCircleElement, _event: MouseEvent, d: any) {
       if (!d.selected) {
         d3.select(this)
-          .attr('stroke', d.color)
-          .attr('stroke-width', 2)
+          .attr('stroke', getDarkerColor(d.color))
+          .attr('stroke-width', 3)
       }
       tooltip.style('display', 'none')
     })
@@ -232,24 +274,27 @@ const initGraph = () => {
       event.stopPropagation()
       
       // 清除之前的选中状态
-      node.selectAll('circle')
-        .attr('stroke', (n: any) => n.color)
-        .attr('stroke-width', 2)
+      node.selectAll('circle').each(function(this: SVGCircleElement, d: any) {
+        d3.select(this)
+          .attr('stroke', getDarkerColor(d.color))
+          .attr('stroke-width', 3)
+      })
       nodes.forEach((n: any) => n.selected = false)
       
       // 设置新的选中状态
       d.selected = true
       d3.select(this)
-        .attr('stroke', '#f5222d')
+        .attr('stroke', '#1890ff')
         .attr('stroke-width', 3)
     })
   
   // 添加文本标签
   node.append('text')
-    .attr('dy', (d: any) => d.size / 2 + 15)
+    .attr('dy', '0.35em')
     .attr('text-anchor', 'middle')
-    .style('font-size', '12px')
-    .style('fill', '#333')
+    .style('font-size', '13px')
+    .style('font-weight', '500')
+    .style('fill', '#fff')
     .style('pointer-events', 'none')
     .text((d: any) => d.label)
   
@@ -290,12 +335,29 @@ const initGraph = () => {
       .attr('x2', (d: any) => d.target.x)
       .attr('y2', (d: any) => d.target.y)
     
+    // 更新边标签位置到线条中点
+    linkLabel.attr('transform', (d: any) => {
+      const x = (d.source.x + d.target.x) / 2
+      const y = (d.source.y + d.target.y) / 2
+      return `translate(${x},${y})`
+    })
+    
+    // 更新背景矩形位置（居中对齐）
+    linkLabel.each(function(this: SVGGElement) {
+      const rect = d3.select(this).select('rect')
+      const width = parseFloat(rect.attr('width'))
+      const height = parseFloat(rect.attr('height'))
+      rect
+        .attr('x', -width / 2)
+        .attr('y', -height / 2)
+    })
+    
     node.attr('transform', (d: any) => `translate(${d.x},${d.y})`)
   })
   
   // 拖拽函数
   function dragstarted(event: any) {
-    if (!event.active) simulation.alphaTarget(0.3).restart()
+    if (!event.active) simulation.alphaTarget(0.05).restart()
     event.subject.fx = event.subject.x
     event.subject.fy = event.subject.y
   }
@@ -365,6 +427,7 @@ const applyFilters = () => {
   if (!hasNodeFilter && !hasEdgeFilter) {
     svg.selectAll('.nodes g').style('display', 'block')
     svg.selectAll('.links line').style('display', 'block')
+    svg.selectAll('.link-labels g').style('display', 'block')
     return
   }
   
@@ -402,6 +465,20 @@ const applyFilters = () => {
       // 边的显示条件：
       // - 如果只有节点过滤：边的两端节点都可见时显示
       // - 如果有边过滤：边类型被选中且两端节点都可见时显示
+      const sourceVisible = visibleNodeIds.has(d.source.id)
+      const targetVisible = visibleNodeIds.has(d.target.id)
+      const bothEndsVisible = sourceVisible && targetVisible
+      
+      if (hasEdgeFilter) {
+        return selectedEdgeTypes.value.includes(d.label) && bothEndsVisible ? 'block' : 'none'
+      } else {
+        return bothEndsVisible ? 'block' : 'none'
+      }
+    })
+  
+  // 5. 显示/隐藏边标签（与边的显示状态保持一致）
+  svg.selectAll('.link-labels g')
+    .style('display', function(d: any) {
       const sourceVisible = visibleNodeIds.has(d.source.id)
       const targetVisible = visibleNodeIds.has(d.target.id)
       const bothEndsVisible = sourceVisible && targetVisible
