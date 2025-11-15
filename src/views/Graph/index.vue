@@ -1,12 +1,22 @@
 <script setup lang="ts">
 import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Loading, Check, Close, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { Loading, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import { agentAPI } from '@/apis/aiChat'
+// @ts-ignore - d3 类型声明
+import * as d3 from 'd3'
 
 // 图谱数据
 const graphData = ref<any>(null)
 const graphContainer = ref<HTMLElement | null>(null)
+let svg: any = null // D3 SVG 实例
+let simulation: any = null // D3 力导向模拟
+let graphWidth = 0 // 图谱宽度
+let graphHeight = 0 // 图谱高度
+let centerX = 0 // 圆形边界中心X
+let centerY = 0 // 圆形边界中心Y
+let boundaryRadius = 0 // 圆形边界半径
+let boundaryCircle: any = null // 圆形边界元素
 
 // AI对话相关
 const aiMessages = ref<any[]>([])
@@ -21,8 +31,16 @@ const selectedModel = ref('gemini_flash')
 const showModelDropdown = ref(false)
 
 // 分割器
-const leftPanelWidth = ref(65)
+const leftPanelWidth = ref(75)
 const isDragging = ref(false)
+
+// 当前选中的节点（保留用于未来功能）
+// const selectedNode = ref<any>(null)
+
+// 侧边栏相关
+const sidebarCollapsed = ref(false)
+const selectedNodeTypes = ref<string[]>([]) // 选中的节点类型过滤
+const selectedEdgeTypes = ref<string[]>([]) // 选中的边类型过滤
 
 // 加载图谱数据
 const loadGraphData = async () => {
@@ -33,8 +51,10 @@ const loadGraphData = async () => {
     if (result.code === 200) {
       graphData.value = result.data
       ElMessage.success('图谱数据加载成功')
-      // TODO: 初始化图谱可视化
-      initGraph()
+      // 初始化图谱可视化
+      nextTick(() => {
+        initGraph()
+      })
     } else {
       ElMessage.error('加载图谱数据失败')
     }
@@ -43,41 +63,355 @@ const loadGraphData = async () => {
   }
 }
 
+// 节点颜色映射
+const nodeColorMap: Record<string, string> = {
+  User: '#5B8FF9',       // 蓝色
+  Article: '#5AD8A6',    // 绿色  
+  Category: '#F6BD16',   // 黄色
+  Tag: '#E86452',        // 红色
+}
+
 // 初始化图谱可视化
 const initGraph = () => {
-  // TODO: 使用 G6 或其他库初始化图谱
-  console.log('图谱数据:', graphData.value)
+  if (!graphContainer.value || !graphData.value) return
   
-  if (!graphContainer.value) return
-  
-  // 临时显示基本信息
-  const summary = graphData.value?.summary
-  if (summary) {
-    graphContainer.value.innerHTML = `
-      <div style="padding: 20px; text-align: center;">
-        <h2>知识图谱概览</h2>
-        <div style="margin-top: 20px;">
-          <p>总节点数: ${summary.totalNodes}</p>
-          <p>总边数: ${summary.totalEdges}</p>
-          <div style="margin-top: 10px;">
-            <strong>节点类型:</strong>
-            <ul style="list-style: none; padding: 0;">
-              ${Object.entries(summary.nodeTypes).map(([type, count]) => `<li>${type}: ${count}</li>`).join('')}
-            </ul>
-          </div>
-          <div style="margin-top: 10px;">
-            <strong>关系类型:</strong>
-            <ul style="list-style: none; padding: 0;">
-              ${Object.entries(summary.edgeTypes).map(([type, count]) => `<li>${type}: ${count}</li>`).join('')}
-            </ul>
-          </div>
-        </div>
-        <p style="margin-top: 20px; color: #666;">
-          图谱可视化库（如 G6）将在此处渲染
-        </p>
-      </div>
-    `
+  // 如果已有实例，先清理
+  if (simulation) {
+    simulation.stop()
   }
+  if (svg) {
+    svg.remove()
+  }
+  
+  // 清空容器
+  graphContainer.value.innerHTML = ''
+  
+  graphWidth = graphContainer.value.offsetWidth
+  graphHeight = graphContainer.value.offsetHeight
+  
+  // 处理数据格式
+  const nodes = graphData.value.nodes.map((node: any) => {
+    const label = node.properties.title || node.properties.username || node.properties.name || node.id
+    const nodeType = node.label
+    
+    return {
+      id: node.id,
+      label: label.length > 15 ? label.substring(0, 15) + '...' : label,
+      fullLabel: label,
+      type: nodeType,
+      color: nodeColorMap[nodeType] || '#ccc',
+      size: Math.max(25, Math.min(50, 25 + (node.stats?.inDegree || 0) * 2)),
+      x: graphWidth / 2 + Math.random() * 100 - 50,
+      y: graphHeight / 2 + Math.random() * 100 - 50,
+    }
+  })
+  
+  const links = graphData.value.edges.map((edge: any) => ({
+    source: edge.source,
+    target: edge.target,
+    label: edge.label,
+  }))
+  
+  // 创建SVG
+  svg = d3.select(graphContainer.value)
+    .append('svg')
+    .attr('width', graphWidth)
+    .attr('height', graphHeight)
+    .style('background', '#fafafa')
+  
+  // 添加缩放行为
+  const g = svg.append('g')
+  
+  const zoom = d3.zoom()
+    .scaleExtent([0.1, 4])
+    .on('zoom', (event: d3.D3ZoomEvent<SVGSVGElement, unknown>) => {
+      g.attr('transform', event.transform)
+    })
+  
+  svg.call(zoom as any)
+  
+  // 定义箭头标记
+  svg.append('defs').selectAll('marker')
+    .data(['end'])
+    .enter().append('marker')
+    .attr('id', 'arrow')
+    .attr('viewBox', '0 -5 10 10')
+    .attr('refX', 20)
+    .attr('refY', 0)
+    .attr('markerWidth', 6)
+    .attr('markerHeight', 6)
+    .attr('orient', 'auto')
+    .append('path')
+    .attr('d', 'M0,-5L10,0L0,5')
+    .attr('fill', '#000')
+  
+  // 计算圆形边界
+  centerX = graphWidth / 2
+  centerY = graphHeight / 2
+  boundaryRadius = Math.min(graphWidth, graphHeight) / 2 - 30 // 留30px边距
+  
+  // 绘制圆形边界
+  boundaryCircle = g.append('circle')
+    .attr('cx', centerX)
+    .attr('cy', centerY)
+    .attr('r', boundaryRadius)
+    .attr('fill', 'none')
+    .attr('stroke', '#ddd')
+    .attr('stroke-width', 2)
+    .attr('stroke-dasharray', '5,5')
+    .style('pointer-events', 'none')
+  
+  // 创建力导向模拟
+  simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id((d: any) => d.id).distance(100))
+    .force('charge', d3.forceManyBody().strength(-80))
+    .force('center', d3.forceCenter(centerX, centerY))
+    .force('collision', d3.forceCollide().radius((d: any) => d.size + 5).strength(0.7))
+  
+  // 绘制边
+  const link = g.append('g')
+    .attr('class', 'links')
+    .selectAll('line')
+    .data(links)
+    .enter().append('line')
+    .attr('stroke', '#000')
+    .attr('stroke-width', 1)
+    .attr('marker-end', 'url(#arrow)')
+    .style('opacity', 0.6)
+    .on('mouseenter', function(this: SVGLineElement) {
+      d3.select(this)
+        .attr('stroke', '#1890ff')
+        .attr('stroke-width', 2)
+        .style('opacity', 1)
+    })
+    .on('mouseleave', function(this: SVGLineElement) {
+      d3.select(this)
+        .attr('stroke', '#000')
+        .attr('stroke-width', 1)
+        .style('opacity', 0.6)
+    })
+  
+  // 绘制节点组
+  const node = g.append('g')
+    .attr('class', 'nodes')
+    .selectAll('g')
+    .data(nodes)
+    .enter().append('g')
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended) as any)
+  
+  // 绘制节点圆形
+  node.append('circle')
+    .attr('r', (d: any) => d.size / 2)
+    .attr('fill', (d: any) => d.color)
+    .attr('stroke', (d: any) => d.color)
+    .attr('stroke-width', 2)
+    .on('mouseenter', function(this: SVGCircleElement, event: MouseEvent, d: any) {
+      d3.select(this)
+        .attr('stroke', '#1890ff')
+        .attr('stroke-width', 3)
+      
+      // 显示tooltip
+      tooltip
+        .style('display', 'block')
+        .style('left', (event.pageX + 10) + 'px')
+        .style('top', (event.pageY - 10) + 'px')
+        .html(`<strong>类型:</strong> ${d.type}<br/><strong>标签:</strong> ${d.fullLabel}`)
+    })
+    .on('mouseleave', function(this: SVGCircleElement, _event: MouseEvent, d: any) {
+      if (!d.selected) {
+        d3.select(this)
+          .attr('stroke', d.color)
+          .attr('stroke-width', 2)
+      }
+      tooltip.style('display', 'none')
+    })
+    .on('click', function(this: SVGCircleElement, event: MouseEvent, d: any) {
+      event.stopPropagation()
+      
+      // 清除之前的选中状态
+      node.selectAll('circle')
+        .attr('stroke', (n: any) => n.color)
+        .attr('stroke-width', 2)
+      nodes.forEach((n: any) => n.selected = false)
+      
+      // 设置新的选中状态
+      d.selected = true
+      d3.select(this)
+        .attr('stroke', '#f5222d')
+        .attr('stroke-width', 3)
+    })
+  
+  // 添加文本标签
+  node.append('text')
+    .attr('dy', (d: any) => d.size / 2 + 15)
+    .attr('text-anchor', 'middle')
+    .style('font-size', '12px')
+    .style('fill', '#333')
+    .style('pointer-events', 'none')
+    .text((d: any) => d.label)
+  
+  // 创建tooltip
+  const tooltip = d3.select('body').append('div')
+    .attr('class', 'd3-tooltip')
+    .style('position', 'absolute')
+    .style('display', 'none')
+    .style('background', 'rgba(0, 0, 0, 0.8)')
+    .style('color', 'white')
+    .style('padding', '8px 12px')
+    .style('border-radius', '4px')
+    .style('font-size', '12px')
+    .style('pointer-events', 'none')
+    .style('z-index', '10000')
+  
+  // 更新位置
+  simulation.on('tick', () => {
+    // 应用圆形边界约束
+    nodes.forEach((d: any) => {
+      const dx = d.x - centerX
+      const dy = d.y - centerY
+      const distance = Math.sqrt(dx * dx + dy * dy)
+      const nodeRadius = d.size / 2
+      
+      // 如果节点超出圆形边界，将其拉回
+      if (distance + nodeRadius > boundaryRadius) {
+        const angle = Math.atan2(dy, dx)
+        const maxDistance = boundaryRadius - nodeRadius
+        d.x = centerX + Math.cos(angle) * maxDistance
+        d.y = centerY + Math.sin(angle) * maxDistance
+      }
+    })
+    
+    link
+      .attr('x1', (d: any) => d.source.x)
+      .attr('y1', (d: any) => d.source.y)
+      .attr('x2', (d: any) => d.target.x)
+      .attr('y2', (d: any) => d.target.y)
+    
+    node.attr('transform', (d: any) => `translate(${d.x},${d.y})`)
+  })
+  
+  // 拖拽函数
+  function dragstarted(event: any) {
+    if (!event.active) simulation.alphaTarget(0.3).restart()
+    event.subject.fx = event.subject.x
+    event.subject.fy = event.subject.y
+  }
+  
+  function dragged(event: any) {
+    const nodeRadius = event.subject.size / 2
+    const dx = event.x - centerX
+    const dy = event.y - centerY
+    const distance = Math.sqrt(dx * dx + dy * dy)
+    
+    // 应用圆形边界约束
+    if (distance + nodeRadius > boundaryRadius) {
+      const angle = Math.atan2(dy, dx)
+      const maxDistance = boundaryRadius - nodeRadius
+      event.subject.fx = centerX + Math.cos(angle) * maxDistance
+      event.subject.fy = centerY + Math.sin(angle) * maxDistance
+    } else {
+      event.subject.fx = event.x
+      event.subject.fy = event.y
+    }
+  }
+  
+  function dragended(event: any) {
+    if (!event.active) simulation.alphaTarget(0)
+    event.subject.fx = null
+    event.subject.fy = null
+  }
+  
+  console.log('D3图谱初始化完成，节点数:', nodes.length, '边数:', links.length)
+}
+
+// 切换侧边栏
+const toggleSidebar = () => {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// 切换节点类型过滤
+const toggleNodeTypeFilter = (type: string) => {
+  const index = selectedNodeTypes.value.indexOf(type)
+  if (index > -1) {
+    selectedNodeTypes.value.splice(index, 1)
+  } else {
+    selectedNodeTypes.value.push(type)
+  }
+  applyFilters()
+}
+
+// 切换边类型过滤
+const toggleEdgeTypeFilter = (type: string) => {
+  const index = selectedEdgeTypes.value.indexOf(type)
+  if (index > -1) {
+    selectedEdgeTypes.value.splice(index, 1)
+  } else {
+    selectedEdgeTypes.value.push(type)
+  }
+  applyFilters()
+}
+
+// 应用过滤器
+const applyFilters = () => {
+  if (!svg) return
+  
+  const hasNodeFilter = selectedNodeTypes.value.length > 0
+  const hasEdgeFilter = selectedEdgeTypes.value.length > 0
+  
+  // 如果没有任何过滤器，显示全部
+  if (!hasNodeFilter && !hasEdgeFilter) {
+    svg.selectAll('.nodes g').style('display', 'block')
+    svg.selectAll('.links line').style('display', 'block')
+    return
+  }
+  
+  // 收集需要显示的节点ID
+  const visibleNodeIds = new Set<string>()
+  
+  // 1. 根据节点类型过滤收集节点
+  if (hasNodeFilter) {
+    svg.selectAll('.nodes g').each(function(d: any) {
+      if (selectedNodeTypes.value.includes(d.type)) {
+        visibleNodeIds.add(d.id)
+      }
+    })
+  }
+  
+  // 2. 根据边类型过滤，收集边两端的节点
+  if (hasEdgeFilter) {
+    svg.selectAll('.links line').each(function(d: any) {
+      if (selectedEdgeTypes.value.includes(d.label)) {
+        visibleNodeIds.add(d.source.id)
+        visibleNodeIds.add(d.target.id)
+      }
+    })
+  }
+  
+  // 3. 显示/隐藏节点
+  svg.selectAll('.nodes g')
+    .style('display', function(d: any) {
+      return visibleNodeIds.has(d.id) ? 'block' : 'none'
+    })
+  
+  // 4. 显示/隐藏边
+  svg.selectAll('.links line')
+    .style('display', function(d: any) {
+      // 边的显示条件：
+      // - 如果只有节点过滤：边的两端节点都可见时显示
+      // - 如果有边过滤：边类型被选中且两端节点都可见时显示
+      const sourceVisible = visibleNodeIds.has(d.source.id)
+      const targetVisible = visibleNodeIds.has(d.target.id)
+      const bothEndsVisible = sourceVisible && targetVisible
+      
+      if (hasEdgeFilter) {
+        return selectedEdgeTypes.value.includes(d.label) && bothEndsVisible ? 'block' : 'none'
+      } else {
+        return bothEndsVisible ? 'block' : 'none'
+      }
+    })
 }
 
 // 加载可用模型
@@ -99,11 +433,59 @@ onMounted(async () => {
   await loadGraphData()
   await loadModels()
   document.addEventListener('click', handleClickOutside)
+  
+  // 监听窗口大小变化
+  window.addEventListener('resize', handleResize)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
+  window.removeEventListener('resize', handleResize)
+  
+  // 清理D3实例
+  if (simulation) {
+    simulation.stop()
+    simulation = null
+  }
+  if (svg) {
+    svg.remove()
+    svg = null
+  }
+  // 清理tooltip
+  d3.selectAll('.d3-tooltip').remove()
 })
+
+// 处理窗口大小变化
+const handleResize = () => {
+  if (svg && simulation && graphContainer.value) {
+    graphWidth = graphContainer.value.offsetWidth
+    graphHeight = graphContainer.value.offsetHeight
+    
+    // 更新圆形边界参数
+    centerX = graphWidth / 2
+    centerY = graphHeight / 2
+    boundaryRadius = Math.min(graphWidth, graphHeight) / 2 - 30
+    
+    // 更新SVG大小
+    svg
+      .attr('width', graphWidth)
+      .attr('height', graphHeight)
+    
+    // 更新圆形边界位置和大小
+    if (boundaryCircle) {
+      boundaryCircle
+        .attr('cx', centerX)
+        .attr('cy', centerY)
+        .attr('r', boundaryRadius)
+    }
+    
+    // 更新力导向中心
+    simulation
+      .force('center', d3.forceCenter(centerX, centerY))
+      .alpha(0.3)
+      .restart()
+  }
+}
 
 // 监听AI消息变化，自动滚动
 watch(() => aiMessages.value, () => {
@@ -389,6 +771,13 @@ const onDrag = (e: MouseEvent) => {
   newLeftWidth = Math.max(30, Math.min(80, newLeftWidth))
   
   leftPanelWidth.value = newLeftWidth
+  
+  // 调整图谱大小
+  if (svg) {
+    nextTick(() => {
+      handleResize()
+    })
+  }
 }
 
 const stopDrag = () => {
@@ -404,17 +793,76 @@ const stopDrag = () => {
   <div class="graph-container">
     <!-- 左侧图谱可视化区域 -->
     <div class="graph-visualization-section" :style="{ width: leftPanelWidth + '%' }">
-      <div class="graph-header">
-        <h2>知识图谱可视化</h2>
-        <div class="header-actions">
-          <el-button size="small" @click="loadGraphData">刷新数据</el-button>
+      <!-- 侧边栏 -->
+      <div class="graph-sidebar" :class="{ 'collapsed': sidebarCollapsed }">
+        <div class="sidebar-header">
+          <h3 v-if="!sidebarCollapsed">数据统计</h3>
+          <button class="sidebar-toggle" @click="toggleSidebar" :title="sidebarCollapsed ? '展开' : '收起'">
+            <el-icon>
+              <ArrowRight v-if="sidebarCollapsed" />
+              <ArrowLeft v-else />
+            </el-icon>
+          </button>
+        </div>
+        
+        <div class="sidebar-content" v-if="!sidebarCollapsed && graphData">
+          <!-- Node labels -->
+          <div class="sidebar-section">
+            <h4 class="section-title">Node labels (*{{ graphData.summary?.totalNodes || 0 }})</h4>
+            <div class="label-list">
+              <div 
+                v-for="(count, type) in graphData.summary?.nodeTypes" 
+                :key="String(type)"
+                class="label-item"
+                :class="{ 'active': selectedNodeTypes.includes(String(type)) }"
+                @click="toggleNodeTypeFilter(String(type))"
+              >
+                <span 
+                  class="label-badge" 
+                  :style="{ backgroundColor: nodeColorMap[String(type)] || '#ccc' }"
+                >
+                  {{ count }}
+                </span>
+                <span class="label-text">{{ type }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Relationship types -->
+          <div class="sidebar-section">
+            <h4 class="section-title">Relationship types (*{{ graphData.summary?.totalEdges || 0 }})</h4>
+            <div class="label-list">
+              <div 
+                v-for="(count, type) in graphData.summary?.edgeTypes" 
+                :key="String(type)"
+                class="label-item"
+                :class="{ 'active': selectedEdgeTypes.includes(String(type)) }"
+                @click="toggleEdgeTypeFilter(String(type))"
+              >
+                <span class="label-badge relationship-badge">
+                  {{ count }}
+                </span>
+                <span class="label-text">{{ type }}</span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
       
-      <div class="graph-content" ref="graphContainer">
-        <div v-if="!graphData" class="loading-container">
-          <el-icon class="is-loading" style="font-size: 48px;"><Loading /></el-icon>
-          <p>加载中...</p>
+      <!-- 图谱主体区域 -->
+      <div class="graph-main">
+        <div class="graph-header">
+          <h2>知识图谱可视化</h2>
+          <div class="header-actions">
+            <el-button size="small" @click="loadGraphData">刷新数据</el-button>
+          </div>
+        </div>
+        
+        <div class="graph-content" ref="graphContainer">
+          <div v-if="!graphData" class="loading-container">
+            <el-icon class="is-loading" style="font-size: 48px;"><Loading /></el-icon>
+            <p>加载中...</p>
+          </div>
         </div>
       </div>
     </div>
@@ -556,9 +1004,166 @@ const stopDrag = () => {
   border-radius: 8px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   overflow: hidden;
   transition: width 0.1s ease;
+}
+
+// 侧边栏
+.graph-sidebar {
+  width: 240px;
+  background: #2d2d2d;
+  color: #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #444;
+  transition: width 0.3s ease;
+  flex-shrink: 0;
+  
+  &.collapsed {
+    width: 50px;
+  }
+}
+
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid #444;
+  min-height: 60px;
+  
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+  }
+}
+
+.sidebar-toggle {
+  background: transparent;
+  border: none;
+  color: #e0e0e0;
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  
+  &:hover {
+    background: #444;
+  }
+  
+  .el-icon {
+    font-size: 18px;
+  }
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  &::-webkit-scrollbar-track {
+    background: #2d2d2d;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #555;
+    border-radius: 3px;
+    
+    &:hover {
+      background: #666;
+    }
+  }
+}
+
+.sidebar-section {
+  margin-bottom: 25px;
+  
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.section-title {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.label-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  opacity: 0.7;
+  
+  &:hover {
+    background: #3a3a3a;
+    opacity: 1;
+  }
+  
+  &.active {
+    background: #3a3a3a;
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(94, 158, 214, 0.3);
+  }
+}
+
+.label-badge {
+  min-width: 32px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  padding: 0 8px;
+  flex-shrink: 0;
+}
+
+.relationship-badge {
+  background: #666;
+}
+
+.label-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e0e0e0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// 图谱主体区域
+.graph-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .graph-header {
@@ -581,8 +1186,8 @@ const stopDrag = () => {
 
 .graph-content {
   flex: 1;
-  overflow: auto;
-  padding: 20px;
+  overflow: hidden;
+  position: relative;
 }
 
 .loading-container {
