@@ -396,7 +396,7 @@ const getArticleTypeText = (type: number) => {
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="categoryName" label="分类" width="100">
+        <el-table-column prop="categoryName" label="分类" width="120" show-overflow-tooltip>
           <template #default="{ row }">
             <el-tag>{{ row.categoryName }}</el-tag>
           </template>
@@ -523,6 +523,13 @@ const getArticleTypeText = (type: number) => {
   
   .el-table__body tr:hover > td {
     background: #fafafa !important;
+  }
+  
+  .el-tag {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 

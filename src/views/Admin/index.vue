@@ -61,7 +61,7 @@ const selectedModel = ref('gemini_flash')
 const showModelDropdown = ref(false)
 
 // 分割器相关
-const contentWidth = ref(70) // 内容区占比（百分比）
+const contentWidth = ref(80) // 内容区占比（百分比）
 const isDragging = ref(false)
 const startX = ref(0)
 const startWidth = ref(0)
@@ -743,33 +743,46 @@ onUnmounted(() => {
 // 分割器
 .divider {
   width: 6px;
-  background: #e8e8e8;
+  background: transparent;
   cursor: col-resize;
   position: relative;
   transition: background 0.2s;
   flex-shrink: 0;
   
-  &:hover,
+  // 悬停时显示微妙的提示线
+  &:hover {
+    background: rgba(64, 158, 255, 0.1);
+    
+    &::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: 10px;
+      background: rgba(64, 158, 255, 0.3);
+    }
+  }
+  
+  // 拖拽时显示更明显的提示线
   &.dragging {
-    background: #409eff;
+    background: rgba(64, 158, 255, 0.15);
+    
+    &::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      top: 0;
+      bottom: 0;
+      transform: translateX(-50%);
+      width: 2px;
+      background: #409eff;
+    }
   }
   
   .divider-handle {
-    position: absolute;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
-    width: 3px;
-    height: 40px;
-    background: #fff;
-    border-radius: 2px;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-  
-  &:hover .divider-handle,
-  &.dragging .divider-handle {
-    opacity: 1;
+    display: none;
   }
 }
 

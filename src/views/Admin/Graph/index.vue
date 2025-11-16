@@ -16,6 +16,8 @@ let centerX = 0 // 圆形边界中心X
 let centerY = 0 // 圆形边界中心Y
 let boundaryRadius = 0 // 圆形边界半径
 let boundaryCircle: any = null // 圆形边界元素
+let resizeObserver: ResizeObserver | null = null // ResizeObserver 实例
+let resizeTimer: number | null = null // 防抖定时器
 
 // 侧边栏相关
 const sidebarCollapsed = ref(true)
@@ -486,12 +488,35 @@ const applyFilters = () => {
 
 onMounted(async () => {
   await loadGraphData()
+  
   // 监听窗口大小变化
   window.addEventListener('resize', handleResize)
+  
+  // 使用 ResizeObserver 监听容器大小变化（更精确，包括侧边栏展开/收起等情况）
+  if (graphContainer.value && typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(() => {
+      handleResize()
+    })
+    resizeObserver.observe(graphContainer.value)
+  }
 })
 
 onUnmounted(() => {
+  // 清理窗口监听
   window.removeEventListener('resize', handleResize)
+  
+  // 清理 ResizeObserver
+  if (resizeObserver && graphContainer.value) {
+    resizeObserver.unobserve(graphContainer.value)
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
+  
+  // 清理防抖定时器
+  if (resizeTimer) {
+    clearTimeout(resizeTimer)
+    resizeTimer = null
+  }
 
   // 清理D3实例
   if (simulation) {
@@ -506,36 +531,52 @@ onUnmounted(() => {
   d3.selectAll('.d3-tooltip').remove()
 })
 
-// 处理窗口大小变化
+// 处理窗口大小变化（带防抖）
 const handleResize = () => {
-  if (svg && simulation && graphContainer.value) {
-    graphWidth = graphContainer.value.offsetWidth
-    graphHeight = graphContainer.value.offsetHeight
-
-    // 更新圆形边界参数
-    centerX = graphWidth / 2
-    centerY = graphHeight / 2
-    boundaryRadius = Math.min(graphWidth, graphHeight) / 2 - 30
-
-    // 更新SVG大小
-    svg
-      .attr('width', graphWidth)
-      .attr('height', graphHeight)
-
-    // 更新圆形边界位置和大小
-    if (boundaryCircle) {
-      boundaryCircle
-        .attr('cx', centerX)
-        .attr('cy', centerY)
-        .attr('r', boundaryRadius)
-    }
-
-    // 更新力导向中心
-    simulation
-      .force('center', d3.forceCenter(centerX, centerY))
-      .alpha(0.3)
-      .restart()
+  // 清除之前的定时器
+  if (resizeTimer) {
+    clearTimeout(resizeTimer)
   }
+  
+  // 设置防抖，300ms 后执行
+  resizeTimer = window.setTimeout(() => {
+    if (svg && simulation && graphContainer.value) {
+      const newWidth = graphContainer.value.offsetWidth
+      const newHeight = graphContainer.value.offsetHeight
+      
+      // 如果尺寸没有变化，不执行更新
+      if (newWidth === graphWidth && newHeight === graphHeight) {
+        return
+      }
+      
+      graphWidth = newWidth
+      graphHeight = newHeight
+
+      // 更新圆形边界参数
+      centerX = graphWidth / 2
+      centerY = graphHeight / 2
+      boundaryRadius = Math.min(graphWidth, graphHeight) / 2 - 30
+
+      // 更新SVG大小
+      svg
+        .attr('width', graphWidth)
+        .attr('height', graphHeight)
+
+      // 更新圆形边界位置和大小
+      if (boundaryCircle) {
+        boundaryCircle
+          .attr('cx', centerX)
+          .attr('cy', centerY)
+          .attr('r', boundaryRadius)
+      }
+
+      // 更新力导向中心
+      simulation
+        .force('center', d3.forceCenter(centerX, centerY))
+        .alpha(0.3)
+        .restart()
+    }
+  }, 300)
 }
 </script>
 
@@ -825,6 +866,15 @@ const handleResize = () => {
   flex: 1;
   overflow: hidden;
   position: relative;
+  width: 100%;
+  height: 100%;
+  
+  // 确保 SVG 能够自适应容器大小
+  :deep(svg) {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
 }
 
 .loading-container {
