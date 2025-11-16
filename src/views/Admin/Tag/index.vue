@@ -16,15 +16,15 @@ const searchForm = reactive({
 })
 
 // 表格数据
-const tableData = ref([])
+const tableData = ref<any[]>([])
 const loading = ref(false)
-const selectedRows = ref([])
-const allTagData = ref([]) // 保存所有标签数据用于前端分页
+const selectedRows = ref<any[]>([])
+const allTagData = ref<any[]>([]) // 保存所有标签数据用于前端分页
 
 // 分页数据
 const pagination = reactive({
   currentPage: 1,
-  pageSize: 10,
+  pageSize: 20,
   total: 0,
   pageSizes: [10, 20, 30, 50, 100]
 })
@@ -367,6 +367,7 @@ const handleClose = () => {
 
 .table-section {
   // 表格区域样式
+  width: 100%;
 }
 
 .selected-tip {

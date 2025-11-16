@@ -7,7 +7,7 @@ import {
   Postcard,
   UserFilled,
   Headset,
-  Setting, Promotion, Clock, DocumentCopy, PriceTag, Fries, Close, ChatLineSquare, Edit, Connection
+  Setting, Promotion, Clock, DocumentCopy, PriceTag, Fries, Close, ChatLineSquare, Edit
 } from '@element-plus/icons-vue'
 import SvgIcon from '@/components/SvgIcon/index.vue'
 import {useColorMode} from '@vueuse/core'
@@ -216,12 +216,6 @@ const env = import.meta.env
               <Edit/>
             </el-icon>
             发布
-          </el-menu-item>
-          <el-menu-item index="/graph">
-            <el-icon>
-              <Connection/>
-            </el-icon>
-            图谱
           </el-menu-item>
           <el-menu-item index="/admin">
             <el-icon>

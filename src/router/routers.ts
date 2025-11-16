@@ -119,15 +119,6 @@ export const constantRouter = [
                     requireAuth: true
                 }
             },
-            // 知识图谱
-            {
-                path: '/graph',
-                component: () => import('@/views/Graph/index.vue'),
-                name: 'graph',
-                meta: {
-                    title: '知识图谱可视化',
-                }
-            },
             // 后台管理
             {
                 path: '/admin',

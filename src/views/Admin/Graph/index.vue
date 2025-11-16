@@ -4,6 +4,7 @@ import { ElMessage } from 'element-plus'
 import { Loading, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 // @ts-ignore - d3 类型声明
 import * as d3 from 'd3'
+import { getGraphOverview } from '@/apis/graph'
 
 // 图谱数据
 const graphData = ref<any>(null)
@@ -28,8 +29,7 @@ const isHovering = ref(false) // 鼠标悬浮状态
 // 加载图谱数据
 const loadGraphData = async () => {
   try {
-    const response = await fetch('http://localhost:7000/graph/overview?limit=100')
-    const result = await response.json()
+    const result: any = await getGraphOverview({ limit: 100 })
     
     if (result.code === 200) {
       graphData.value = result.data
