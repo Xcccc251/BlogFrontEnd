@@ -38,7 +38,7 @@ const isDragging = ref(false)
 // const selectedNode = ref<any>(null)
 
 // 侧边栏相关
-const sidebarCollapsed = ref(false)
+const sidebarCollapsed = ref(true)
 const selectedNodeTypes = ref<string[]>([]) // 选中的节点类型过滤
 const selectedEdgeTypes = ref<string[]>([]) // 选中的边类型过滤
 

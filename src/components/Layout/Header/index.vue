@@ -223,6 +223,12 @@ const env = import.meta.env
             </el-icon>
             图谱
           </el-menu-item>
+          <el-menu-item index="/admin">
+            <el-icon>
+              <Setting/>
+            </el-icon>
+            管理
+          </el-menu-item>
           <!-- <el-menu-item index="/about">
             <el-icon>
               <UserFilled/>

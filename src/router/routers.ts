@@ -127,6 +127,46 @@ export const constantRouter = [
                 meta: {
                     title: '知识图谱可视化',
                 }
+            },
+            // 后台管理
+            {
+                path: '/admin',
+                component: () => import('@/views/Admin/index.vue'),
+                name: 'admin',
+                redirect: '/admin/article',
+                meta: {
+                    title: '后台管理',
+                    requireAuth: true
+                },
+                children: [
+                    {
+                        path: 'article',
+                        component: () => import('@/views/Admin/Article/index.vue'),
+                        name: 'adminArticle',
+                        meta: {
+                            title: '文章管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'tag',
+                        component: () => import('@/views/Admin/Tag/index.vue'),
+                        name: 'adminTag',
+                        meta: {
+                            title: '标签管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'graph',
+                        component: () => import('@/views/Admin/Graph/index.vue'),
+                        name: 'adminGraph',
+                        meta: {
+                            title: '知识图谱',
+                            requireAuth: true
+                        }
+                    }
+                ]
             }
         ]
     },
