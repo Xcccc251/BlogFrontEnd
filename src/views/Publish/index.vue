@@ -1923,7 +1923,7 @@ const stopDrag = () => {
         <!-- 自定义编辑器 -->
         <CustomMarkdownEditor
           v-model="formData.articleContent"
-          :height="'60vh'"
+          :height="'calc(100vh - 280px)'"
           :theme="mode === 'auto' ? 'light' : mode"
           :showDiff="showDiff"
           :diffContent="diffContent"
