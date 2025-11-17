@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Document, Collection, Connection, Loading, ArrowRight, Check, Close } from '@element-plus/icons-vue'
+import { Document, Collection, Connection, Loading, ArrowRight, Check, Close, FolderOpened, ChatDotSquare, Star, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import useUserStore from '@/store/modules/user'
 import { agentAPI } from '@/apis/aiChat'
@@ -27,10 +27,34 @@ const menuItems = [
     path: '/admin/article'
   },
   {
+    key: 'category',
+    label: '分类管理',
+    icon: FolderOpened,
+    path: '/admin/category'
+  },
+  {
     key: 'tag',
     label: '标签管理',
     icon: Collection,
     path: '/admin/tag'
+  },
+  {
+    key: 'comment',
+    label: '评论管理',
+    icon: ChatDotSquare,
+    path: '/admin/comment'
+  },
+  {
+    key: 'favorite',
+    label: '收藏管理',
+    icon: Star,
+    path: '/admin/favorite'
+  },
+  {
+    key: 'database',
+    label: '数据库管理',
+    icon: Coin,
+    path: '/admin/database'
   },
   {
     key: 'graph',

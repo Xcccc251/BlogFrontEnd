@@ -140,11 +140,47 @@ export const constantRouter = [
                         }
                     },
                     {
+                        path: 'category',
+                        component: () => import('@/views/Admin/Category/index.vue'),
+                        name: 'adminCategory',
+                        meta: {
+                            title: '分类管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
                         path: 'tag',
                         component: () => import('@/views/Admin/Tag/index.vue'),
                         name: 'adminTag',
                         meta: {
                             title: '标签管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'comment',
+                        component: () => import('@/views/Admin/Comment/index.vue'),
+                        name: 'adminComment',
+                        meta: {
+                            title: '评论管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'favorite',
+                        component: () => import('@/views/Admin/Favorite/index.vue'),
+                        name: 'adminFavorite',
+                        meta: {
+                            title: '收藏管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'database',
+                        component: () => import('@/views/Admin/Database/index.vue'),
+                        name: 'adminDatabase',
+                        meta: {
+                            title: '数据库管理',
                             requireAuth: true
                         }
                     },
