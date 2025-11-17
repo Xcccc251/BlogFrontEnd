@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Loading, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
+import { Loading, ArrowLeft, ArrowRight, Search } from '@element-plus/icons-vue'
 // @ts-ignore - d3 类型声明
 import * as d3 from 'd3'
-import { getGraphOverview } from '@/apis/graph'
+import { getGraphOverview, executeGraphQuery } from '@/apis/graph'
 
 // 图谱数据
 const graphData = ref<any>(null)
 const graphContainer = ref<HTMLElement | null>(null)
+
+// 查询相关
+const queryCommand = ref('')
+const queryLoading = ref(false)
+const isQueryMode = ref(false) // 是否为查询模式
 let svg: any = null // D3 SVG 实例
 let simulation: any = null // D3 力导向模拟
 let graphWidth = 0 // 图谱宽度
@@ -29,6 +34,7 @@ const isHovering = ref(false) // 鼠标悬浮状态
 // 加载图谱数据
 const loadGraphData = async () => {
   try {
+    isQueryMode.value = false
     const result: any = await getGraphOverview({ limit: 100 })
     
     if (result.code === 200) {
@@ -43,6 +49,120 @@ const loadGraphData = async () => {
     }
   } catch (error: any) {
     ElMessage.error('加载图谱数据失败: ' + error.message)
+  }
+}
+
+// 转换查询结果为图谱数据格式
+const convertQueryResultToGraphData = (queryResult: any) => {
+  const nodesMap = new Map()
+  const edgesMap = new Map()
+  
+  if (!queryResult.records || queryResult.records.length === 0) {
+    return { nodes: [], edges: [], summary: { totalNodes: 0, totalEdges: 0, nodeTypes: {}, edgeTypes: {} } }
+  }
+  
+  // 遍历查询结果记录
+  queryResult.records.forEach((record: any) => {
+    // 遍历记录中的每个字段
+    Object.values(record).forEach((item: any) => {
+      if (!item) return
+      
+      // 判断是节点还是关系
+      if (item.labels && Array.isArray(item.labels)) {
+        // 这是一个节点
+        const nodeId = item.id || item.properties?.id || Math.random().toString()
+        if (!nodesMap.has(nodeId)) {
+          nodesMap.set(nodeId, {
+            id: nodeId,
+            label: item.labels[0] || 'Unknown',
+            properties: item.properties || {}
+          })
+        }
+      } else if (item.type) {
+        // 这是一个关系/边
+        const edgeId = `${item.start}-${item.type}-${item.end}`
+        if (!edgesMap.has(edgeId)) {
+          edgesMap.set(edgeId, {
+            source: item.start,
+            target: item.end,
+            label: item.type,
+            properties: item.properties || {}
+          })
+        }
+      }
+    })
+  })
+  
+  const nodes = Array.from(nodesMap.values())
+  const edges = Array.from(edgesMap.values())
+  
+  // 生成统计信息
+  const nodeTypes: Record<string, number> = {}
+  const edgeTypes: Record<string, number> = {}
+  
+  nodes.forEach(node => {
+    nodeTypes[node.label] = (nodeTypes[node.label] || 0) + 1
+  })
+  
+  edges.forEach(edge => {
+    edgeTypes[edge.label] = (edgeTypes[edge.label] || 0) + 1
+  })
+  
+  return {
+    nodes,
+    edges,
+    summary: {
+      totalNodes: nodes.length,
+      totalEdges: edges.length,
+      nodeTypes,
+      edgeTypes
+    }
+  }
+}
+
+// 执行查询
+const executeQuery = async () => {
+  if (!queryCommand.value.trim()) {
+    ElMessage.warning('请输入查询命令')
+    return
+  }
+  
+  queryLoading.value = true
+  
+  try {
+    const result: any = await executeGraphQuery(queryCommand.value.trim())
+    
+    if (result.code === 200) {
+      isQueryMode.value = true
+      // 转换查询结果为图谱数据格式
+      const convertedData = convertQueryResultToGraphData(result.data)
+      
+      if (convertedData.nodes.length === 0) {
+        ElMessage.warning('查询结果为空，未找到任何节点')
+        return
+      }
+      
+      graphData.value = convertedData
+      ElMessage.success(`查询执行成功，找到 ${convertedData.nodes.length} 个节点`)
+      // 渲染查询结果图谱
+      nextTick(() => {
+        initGraph()
+      })
+    } else {
+      ElMessage.error(result.message || '查询失败')
+    }
+  } catch (error: any) {
+    ElMessage.error('查询执行失败: ' + error.message)
+  } finally {
+    queryLoading.value = false
+  }
+}
+
+// 清空查询
+const clearQuery = () => {
+  queryCommand.value = ''
+  if (isQueryMode.value) {
+    loadGraphData()
   }
 }
 
@@ -654,6 +774,38 @@ const handleResize = () => {
           </div>
         </div>
 
+        <!-- 查询框区域 -->
+        <div class="query-section">
+          <div class="query-input-wrapper">
+            <el-input
+              v-model="queryCommand"
+              placeholder="输入 Cypher 查询语句，例如：MATCH (n:User)-[r:WROTE]->(a:Article) RETURN n, r, a LIMIT 10"
+              class="query-input"
+              @keydown.enter="executeQuery"
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <div class="query-buttons">
+              <el-button 
+                type="primary" 
+                :loading="queryLoading" 
+                @click="executeQuery"
+                :disabled="!queryCommand.trim()"
+              >
+                执行查询
+              </el-button>
+              <el-button @click="clearQuery" :disabled="!queryCommand.trim()">
+                清空
+              </el-button>
+            </div>
+          </div>
+          <div v-if="isQueryMode" class="query-mode-indicator">
+            <el-tag type="success" size="small">查询模式</el-tag>
+          </div>
+        </div>
+
         <div class="graph-content" ref="graphContainer">
           <div v-if="!graphData" class="loading-container">
             <el-icon class="is-loading" style="font-size: 48px;"><Loading /></el-icon>
@@ -860,6 +1012,44 @@ const handleResize = () => {
     display: flex;
     gap: 10px;
   }
+}
+
+// 查询区域
+.query-section {
+  padding: 16px 20px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e5e5e5;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.query-input-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.query-input {
+  flex: 1;
+  
+  :deep(.el-input__wrapper) {
+    background: white;
+  }
+}
+
+.query-buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.query-mode-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #67c23a;
 }
 
 .graph-content {
