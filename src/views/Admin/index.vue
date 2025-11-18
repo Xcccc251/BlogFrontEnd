@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Document, Collection, Connection, Loading, ArrowRight, Check, Close, FolderOpened, ChatDotSquare, Star, Coin } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import useUserStore from '@/store/modules/user'
-import { agentAPI } from '@/apis/aiChat'
+import { backendAgentAPI } from '@/apis/aiChat'
 
 const router = useRouter()
 const route = useRoute()
@@ -12,6 +12,14 @@ const userStore = useUserStore()
 
 // 当前激活的菜单
 const activeMenu = ref('article')
+
+// SQL填充功能 - 用于与Database页面通信
+const fillSqlCallback = ref<((sql: string) => void) | null>(null)
+const registerFillSqlCallback = (callback: (sql: string) => void) => {
+  fillSqlCallback.value = callback
+}
+// 提供给子组件使用
+provide('registerFillSqlCallback', registerFillSqlCallback)
 
 // 检查用户是否登录
 const isLoggedIn = computed(() => {
@@ -93,7 +101,7 @@ const startWidth = ref(0)
 // 加载模型
 const loadModels = async () => {
   try {
-    const response = await agentAPI.getModels()
+    const response = await backendAgentAPI.getModels()
     if (response.data.success) {
       availableModels.value = response.data.models
       if (!availableModels.value.some((m: any) => m.model === selectedModel.value)) {
@@ -131,14 +139,10 @@ const sendAiMessage = async (message: string) => {
 }
 
 const sendAiStreamMessage = async (message: string) => {
-  const context = buildContext()
-  
-  const response = await agentAPI.sendMessage(
-    context,
+  // 后台Agent API使用简化的参数
+  const response = await backendAgentAPI.sendMessage(
     message,
-    '',
-    null,
-    aiMode.value,
+    null, // sessionId - 暂时不使用会话管理
     selectedModel.value
   )
   
@@ -224,7 +228,8 @@ const sendAiStreamMessage = async (message: string) => {
                 role: 'assistant',
                 content: `🔍 正在使用工具: ${parsed.tool_name}...`,
                 bubbleId: bubbleId,
-                messageType: 'tool_start'
+                messageType: 'tool_start',
+                toolName: parsed.tool_name
               })
             } else if (parsed.type === 'tool_result') {
               // 工具结果
@@ -235,6 +240,8 @@ const sendAiStreamMessage = async (message: string) => {
                 const messageIndex = aiMessages.value.findIndex((msg: any) => msg.bubbleId === bubbleId)
                 if (messageIndex !== -1) {
                   aiMessages.value[messageIndex].name = parsed.name
+                  // 保存原始工具数据
+                  aiMessages.value[messageIndex].toolData = bubbleContents.get(bubbleId)
                 }
               }
             } else if (parsed.type === 'tool_end') {
@@ -250,23 +257,52 @@ const sendAiStreamMessage = async (message: string) => {
                   if (content) {
                     try {
                       let summary = ''
-                      if (toolName === 'read_article') {
-                        summary = 'READ'
+                      // Backend Agent 工具处理
+                      if (toolName === 'get_table_list') {
+                        summary = 'QUERY: 获取表列表'
+                      } else if (toolName === 'get_table_structure') {
+                        summary = 'QUERY: 查看表结构'
+                      } else if (toolName === 'generate_sql') {
+                        const toolData = JSON.parse(content)
+                        summary = 'SQL: ' + (toolData.explanation || '生成查询')
+                        // 保存SQL内容和说明
+                        aiMessages.value[messageIndex].sqlContent = toolData.sql || ''
+                        aiMessages.value[messageIndex].sqlExplanation = toolData.explanation || ''
+                        aiMessages.value[messageIndex].collapsed = true // 默认收起
+                        // 自动填充SQL到编辑器（如果在数据库页面）
+                        if (activeMenu.value === 'database' && toolData.sql && fillSqlCallback.value) {
+                          fillSqlCallback.value(toolData.sql)
+                        }
+                      } else if (toolName === 'execute_sql') {
+                        summary = 'EXEC: 执行SQL查询'
+                      } else if (toolName === 'analyze_query_result') {
+                        summary = 'ANALYZE: 分析结果'
+                      } else if (toolName === 'get_database_stats') {
+                        summary = 'STATS: 数据库统计'
+                      } 
+                      // Article Agent 工具处理（保留兼容性）
+                      else if (toolName === 'read_article') {
+                        summary = 'READ: 读取文章'
                       } else if (toolName === 'edit_article' || toolName === 'edit_article_batch') {
                         const toolData = JSON.parse(content)
-                        summary = 'EDIT: ' + (toolData.summary || '')
+                        summary = 'EDIT: ' + (toolData.summary || '编辑文章')
                       } else if (toolName === 'get_categories' || toolName === 'get_tags') {
-                        summary = 'GET: ' + content
+                        summary = 'GET: 获取分类/标签'
                       } else {
-                        const toolData = JSON.parse(content)
-                        summary = 'UPDATE: ' + (toolData.summary || '')
+                        // 默认处理
+                        try {
+                          const toolData = JSON.parse(content)
+                          summary = 'TOOL: ' + (toolData.summary || toolName)
+                        } catch {
+                          summary = 'TOOL: ' + toolName
+                        }
                       }
                       if (summary.trim()) {
                         aiMessages.value[messageIndex].summary = summary
                       }
                     } catch (err) {
                       isSuccess = false
-                      aiMessages.value[messageIndex].summary = 'ERROR:' + content
+                      aiMessages.value[messageIndex].summary = 'ERROR: 工具执行失败'
                     }
                   }
                   aiMessages.value[messageIndex].success = isSuccess
@@ -303,14 +339,7 @@ const sendAiStreamMessage = async (message: string) => {
   }
 }
 
-const buildContext = () => {
-  return `
-当前管理后台，你可以帮助用户进行：
-- 文章管理相关操作
-- 标签管理相关操作
-- 知识图谱相关查询
-`
-}
+// Backend Agent 不需要 buildContext，因为系统提示已在后端定义
 
 const handleAiKeyDown = (event: KeyboardEvent) => {
   if (event.key === 'Enter' && !event.shiftKey) {
@@ -368,10 +397,32 @@ const toggleThinkingCollapse = (index: number) => {
   }
 }
 
+// 复制SQL到剪贴板
+const copySqlToClipboard = async (sql: string) => {
+  try {
+    await navigator.clipboard.writeText(sql)
+    ElMessage.success('SQL已复制到剪贴板')
+  } catch (error) {
+    console.error('复制失败:', error)
+    ElMessage.error('复制失败，请手动复制')
+  }
+}
+
+// 填充SQL到编辑器
+const fillSqlToEditor = (sql: string) => {
+  if (fillSqlCallback.value) {
+    fillSqlCallback.value(sql)
+    ElMessage.success('SQL已填充到编辑器')
+  } else {
+    ElMessage.warning('请先打开数据库管理页面')
+  }
+}
+
 // 格式化工具summary，将前缀加粗
 const formatToolSummary = (summary: string) => {
   if (!summary) return ''
-  const formatted = summary.replace(/^(UPDATE:|GET:|ERROR:|EDIT:|READ)(.*)$/, '<strong>$1</strong>$2')
+  // 支持Backend Agent和Article Agent的所有工具前缀
+  const formatted = summary.replace(/^(UPDATE:|GET:|ERROR:|EDIT:|READ:|QUERY:|SQL:|EXEC:|ANALYZE:|STATS:|TOOL:)(.*)$/, '<strong>$1</strong>$2')
   return formatted
 }
 
@@ -583,8 +634,18 @@ onUnmounted(() => {
       <div ref="aiChatMessages" class="ai-chat-messages">
         <div v-if="aiMessages.length === 0" class="welcome-message">
           <div class="feature-tip">
-            <p v-if="aiMode === 'agent'"><strong>Agent: </strong>Plan,write and publish articles with AI</p>
-            <p v-else><strong>Ask: </strong>Ask AI about anything</p>
+            <p><strong>🔍 数据库查询助手</strong></p>
+            <p>我可以帮助你：</p>
+            <ul style="text-align: left; margin: 10px 0; padding-left: 30px;">
+              <li>查看数据库表结构</li>
+              <li>编写SQL查询语句</li>
+              <li>执行安全的SELECT查询</li>
+              <li>分析查询结果</li>
+              <li>获取数据库统计信息</li>
+            </ul>
+            <p style="color: #999; font-size: 0.85rem; margin-top: 10px;">
+              💡 提示：所有查询都是只读的，不会修改数据库
+            </p>
           </div>
         </div>
         
@@ -610,7 +671,7 @@ onUnmounted(() => {
           </div>
           <!-- 工具消息使用欢迎消息样式 -->
           <div v-else-if="message.messageType === 'tool_start' || message.messageType === 'tool_complete'" class="welcome-message">
-            <div class="feature-tip">
+            <div class="feature-tip" :class="{ 'sql-tool-tip': message.name === 'generate_sql' }">
               <div v-if="message.messageType === 'tool_start'" class="tool-status">
                 <el-icon class="is-loading"><Loading /></el-icon>
                 <span>Invocating Tools ...</span>
@@ -619,6 +680,40 @@ onUnmounted(() => {
                 <el-icon v-if="message.success !== false" class="check-icon"><Check /></el-icon>
                 <el-icon v-else class="error-icon"><Close /></el-icon>
                 <span v-if="message.summary" v-html="formatToolSummary(message.summary)"></span>
+              </div>
+              <!-- generate_sql 特殊处理 - 显示可展开的SQL -->
+              <div v-if="message.messageType === 'tool_complete' && message.name === 'generate_sql' && message.sqlContent" class="sql-detail-wrapper">
+                <div class="sql-detail-header" @click="message.collapsed = !message.collapsed">
+                  <span class="sql-detail-title">
+                    <i class="fas fa-code"></i>
+                    点击{{ message.collapsed ? '展开' : '收起' }}查看SQL
+                  </span>
+                  <el-icon :class="{ 'rotate': !message.collapsed }">
+                    <ArrowRight />
+                  </el-icon>
+                </div>
+                <transition name="sql-expand">
+                  <div v-show="!message.collapsed" class="sql-detail-content">
+                    <div class="sql-code-block">
+                      <pre><code>{{ message.sqlContent }}</code></pre>
+                    </div>
+                    <div class="sql-actions">
+                      <el-button size="small" @click="copySqlToClipboard(message.sqlContent)">
+                        <i class="fas fa-copy"></i>
+                        复制SQL
+                      </el-button>
+                      <el-button 
+                        v-if="activeMenu === 'database'" 
+                        type="primary" 
+                        size="small"
+                        @click="fillSqlToEditor(message.sqlContent)"
+                      >
+                        <i class="fas fa-arrow-right"></i>
+                        填充到编辑器
+                      </el-button>
+                    </div>
+                  </div>
+                </transition>
               </div>
             </div>
           </div>
@@ -631,29 +726,13 @@ onUnmounted(() => {
       
       <div class="ai-chat-input-container">
         <div class="ai-input-wrapper">
-          <div class="mode-selector">
-            <div class="mode-dropdown" @click="toggleModeDropdown" :class="{ active: showModeDropdown }">
-              <span class="mode-icon">{{ aiMode === 'agent' ? '∞' : '💬' }}</span>
-              <span class="mode-text">{{ aiMode === 'agent' ? 'Agent' : 'Ask' }}</span>
-              <i class="fas fa-chevron-down mode-arrow"></i>
-            </div>
-            <div class="mode-options" v-show="showModeDropdown">
-              <div class="mode-option" @click="selectMode('agent')" :class="{ active: aiMode === 'agent' }">
-                <span class="option-icon">∞</span>
-                <span class="option-text">Agent</span>
-              </div>
-              <div class="mode-option" @click="selectMode('ask')" :class="{ active: aiMode === 'ask' }">
-                <span class="option-icon">💬</span>
-                <span class="option-text">Ask</span>
-              </div>
-            </div>
-          </div>
+          <!-- Admin页面使用专门的SQL查询助手，不需要模式选择器 -->
           
           <textarea 
             ref="aiMessageInput"
             v-model="aiInputMessage"
             class="ai-message-input"
-            placeholder="询问任何问题..." 
+            placeholder="Ask Anything ..." 
             rows="1"
             @keydown="handleAiKeyDown"
             @input="autoResizeAiInput"
@@ -1266,6 +1345,118 @@ onUnmounted(() => {
 .tool-status.tool-error {
   color: #ef4444;
   justify-content: flex-start;
+}
+
+/* SQL详情展示样式 */
+.sql-tool-tip {
+  min-width: 400px !important;
+}
+
+.sql-detail-wrapper {
+  margin-top: 12px;
+  border-top: 1px solid rgba(64, 158, 255, 0.2);
+  padding-top: 12px;
+}
+
+.sql-detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+  border-radius: 6px;
+  background: rgba(64, 158, 255, 0.05);
+  
+  &:hover {
+    background: rgba(64, 158, 255, 0.1);
+  }
+}
+
+.sql-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  font-size: 0.9rem;
+  color: #409eff;
+  
+  i {
+    font-size: 1rem;
+  }
+}
+
+.sql-detail-content {
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.sql-code-block {
+  background: #1e1e1e;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+  text-align: left;
+  
+  pre {
+    margin: 0;
+    text-align: left;
+    
+    code {
+      font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #d4d4d4;
+      display: block;
+      white-space: pre-wrap;
+      word-break: break-all;
+      text-align: left;
+    }
+  }
+}
+
+.sql-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  
+  .el-button {
+    i {
+      margin-right: 4px;
+    }
+  }
+}
+
+/* SQL展开动画 */
+.sql-expand-enter-active {
+  transition: all 0.3s ease;
+  max-height: 600px;
+}
+
+.sql-expand-leave-active {
+  transition: all 0.3s ease;
+  max-height: 600px;
+}
+
+.sql-expand-enter-from {
+  opacity: 0;
+  max-height: 0;
+}
+
+.sql-expand-enter-to {
+  opacity: 1;
+  max-height: 600px;
+}
+
+.sql-expand-leave-from {
+  opacity: 1;
+  max-height: 600px;
+}
+
+.sql-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
 }
 
 /* 不同类型消息的样式 */

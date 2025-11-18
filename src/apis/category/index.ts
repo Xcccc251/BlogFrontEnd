@@ -35,7 +35,7 @@ export function updateCategory(data: any) {
 }
 
 // 删除分类
-export function deleteCategoryByIds(ids: string[]) {
+export function deleteCategoryByIds(ids: number[]) {
     return http.delete("/category/back/delete", {
         data: ids
     });

@@ -159,7 +159,7 @@ const handleDelete = async (row: CategoryItem) => {
       }
     )
     
-    const res: any = await deleteCategoryByIds([row.id.toString()])
+    const res: any = await deleteCategoryByIds([row.id])
     if (res.code === 200) {
       ElMessage.success('删除成功')
       loadData()
@@ -192,7 +192,7 @@ const handleBatchDelete = async () => {
       }
     )
     
-    const ids = selectedRows.value.map(item => item.id.toString())
+    const ids = selectedRows.value.map(item => item.id)
     const res: any = await deleteCategoryByIds(ids)
     if (res.code === 200) {
       ElMessage.success('删除成功')
@@ -314,9 +314,20 @@ const handleSizeChange = (size: number) => {
           <el-button type="primary" link :icon="Edit" @click="handleEdit(row)">
             编辑
           </el-button>
-          <el-button type="danger" link :icon="Delete" @click="handleDelete(row)">
-            删除
-          </el-button>
+          <el-tooltip
+            :content="row.articleCount > 0 ? `该分类下还有 ${row.articleCount} 篇文章，无法删除` : '删除分类'"
+            placement="top"
+          >
+            <el-button 
+              type="danger" 
+              link 
+              :icon="Delete" 
+              :disabled="row.articleCount > 0"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
@@ -383,10 +394,6 @@ const handleSizeChange = (size: number) => {
   :deep(.el-form-item) {
     margin-bottom: 0;
   }
-}
-
-.table-section {
-  // 表格区域样式
 }
 
 .selected-tip {

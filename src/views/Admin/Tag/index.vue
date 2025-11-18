@@ -288,7 +288,20 @@ const handleClose = () => {
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link :icon="Edit" @click="handleEdit(row)">编辑</el-button>
-            <el-button type="danger" link :icon="Delete" @click="handleDelete(row)">删除</el-button>
+            <el-tooltip
+              :content="row.articleCount > 0 ? `该标签下还有 ${row.articleCount} 篇文章，无法删除` : '删除标签'"
+              placement="top"
+            >
+              <el-button 
+                type="danger" 
+                link 
+                :icon="Delete" 
+                :disabled="row.articleCount > 0"
+                @click="handleDelete(row)"
+              >
+                删除
+              </el-button>
+            </el-tooltip>
           </template>
         </el-table-column>
       </el-table>
