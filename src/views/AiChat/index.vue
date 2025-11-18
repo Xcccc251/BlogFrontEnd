@@ -408,12 +408,12 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
 
-// 监听消息变化，自动滚动到底部
-watch(() => messages.value, () => {
+// 监听消息变化，自动滚动到底部 - 只在消息数量变化时滚动，避免展开/收起时触发滚动
+watch(() => messages.value.length, () => {
   nextTick(() => {
     scrollToBottom()
   })
-}, { deep: true })
+})
 
 // 加载所有会话
 const loadSessions = async () => {
@@ -1763,7 +1763,6 @@ const toggleThinkingCollapse = (index: number) => {
 
 .thinking-title {
   font-weight: 500;
-  font-style: normal;
   font-size: 0.95rem;
 }
 

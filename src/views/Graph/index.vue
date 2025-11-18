@@ -564,12 +564,12 @@ const handleResize = () => {
   }
 }
 
-// 监听AI消息变化，自动滚动
-watch(() => aiMessages.value, () => {
+// 监听AI消息变化，自动滚动 - 只在消息数量变化时滚动，避免展开/收起时触发滚动
+watch(() => aiMessages.value.length, () => {
   nextTick(() => {
     scrollAiChatToBottom()
   })
-}, { deep: true })
+})
 
 // AI消息处理
 const sendAiMessage = async (message: string) => {

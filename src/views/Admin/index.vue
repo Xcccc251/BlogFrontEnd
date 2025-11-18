@@ -86,6 +86,7 @@ const aiChatMessages = ref<HTMLElement | null>(null)
 const aiMessageInput = ref<HTMLTextAreaElement | null>(null)
 const aiMode = ref('ask') // admin页面默认使用ask模式
 const showModeDropdown = ref(false)
+const currentSessionId = ref<string | null>(null) // 当前会话ID
 
 // 模型选择相关
 const availableModels = ref<any[]>([])
@@ -113,9 +114,37 @@ const loadModels = async () => {
   }
 }
 
+// 创建新会话
+const createNewSession = async () => {
+  try {
+    const response = await backendAgentAPI.createSession()
+    if (response.data.success) {
+      currentSessionId.value = response.data.session.id
+      console.log('创建新会话成功:', currentSessionId.value)
+      return true
+    } else {
+      ElMessage.error('创建会话失败: ' + response.data.error)
+      return false
+    }
+  } catch (error: any) {
+    console.error('创建会话失败:', error)
+    ElMessage.error('创建会话失败')
+    return false
+  }
+}
+
 // AI相关函数
 const sendAiMessage = async (message: string) => {
   if (!message.trim()) return
+  
+  // 如果没有当前会话，先创建一个
+  if (!currentSessionId.value) {
+    const created = await createNewSession()
+    if (!created) {
+      ElMessage.error('无法创建会话，请稍后重试')
+      return
+    }
+  }
   
   aiMessages.value.push({
     role: 'user',
@@ -142,7 +171,7 @@ const sendAiStreamMessage = async (message: string) => {
   // 后台Agent API使用简化的参数
   const response = await backendAgentAPI.sendMessage(
     message,
-    null, // sessionId - 暂时不使用会话管理
+    currentSessionId.value, // 使用当前会话ID
     selectedModel.value
   )
   
@@ -175,6 +204,12 @@ const sendAiStreamMessage = async (message: string) => {
           
           try {
             const parsed = JSON.parse(data)
+            
+            // 更新会话ID（如果服务器返回了新的session_id）
+            if (parsed.session_id && parsed.session_id !== currentSessionId.value) {
+              currentSessionId.value = parsed.session_id
+              console.log('更新会话ID:', currentSessionId.value)
+            }
             
             // 处理不同类型的消息
             if (parsed.type === 'thinking_start') {
@@ -388,6 +423,7 @@ const formatAiMessage = (content: string) => {
 
 const clearChat = () => {
   aiMessages.value = []
+  currentSessionId.value = null // 清空会话ID
 }
 
 // 切换thinking消息的展开/收起状态
@@ -527,10 +563,10 @@ const handleDividerMouseUp = () => {
   document.body.style.userSelect = ''
 }
 
-// 监听消息变化
-watch(aiMessages, () => {
+// 监听消息变化 - 只在消息数量变化时滚动到底部，避免展开/收起时触发滚动
+watch(() => aiMessages.value.length, () => {
   scrollAiChatToBottom()
-}, { deep: true })
+})
 
 // 初始化活动菜单
 onMounted(async () => {

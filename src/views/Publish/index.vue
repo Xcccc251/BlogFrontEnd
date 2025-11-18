@@ -220,12 +220,12 @@ onUnmounted(() => {
   }
 })
 
-// 监听AI消息变化，自动滚动到底部
-watch(() => aiMessages.value, () => {
+// 监听AI消息变化，自动滚动到底部 - 只在消息数量变化时滚动，避免展开/收起时触发滚动
+watch(() => aiMessages.value.length, () => {
   nextTick(() => {
     scrollAiChatToBottom()
   })
-}, { deep: true })
+})
 
 // 监听表单变化，触发自动保存（防抖）
 watch(formData, () => {
