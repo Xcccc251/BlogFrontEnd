@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick, watch, provide } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { Document, Collection, Connection, Loading, ArrowRight, Check, Close, FolderOpened, ChatDotSquare, Star, Coin } from '@element-plus/icons-vue'
+import { Document, Collection, Connection, Loading, ArrowRight, Check, Close, FolderOpened, ChatDotSquare, Star, Coin, Warning, DocumentCopy } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import useUserStore from '@/store/modules/user'
 import { backendAgentAPI } from '@/apis/aiChat'
@@ -98,6 +98,8 @@ const contentWidth = ref(80) // 内容区占比（百分比）
 const isDragging = ref(false)
 const startX = ref(0)
 const startWidth = ref(0)
+
+// SQL 确认相关（已移除对话框，改用气泡内确认）
 
 // 加载模型
 const loadModels = async () => {
@@ -252,6 +254,19 @@ const sendAiStreamMessage = async (message: string) => {
               if (messageIndex !== -1) {
                 aiMessages.value[messageIndex].messageType = 'thinking_complete'
                 aiMessages.value[messageIndex].collapsed = true
+              }
+            } else if (parsed.type === 'sql_confirm_request') {
+              // SQL 确认请求 - 关联到对应的工具气泡
+              const bubbleId = parsed.bubble_id
+              const messageIndex = aiMessages.value.findIndex((msg: any) => msg.bubbleId === bubbleId)
+              if (messageIndex !== -1) {
+                aiMessages.value[messageIndex].sqlConfirmRequest = {
+                  sql: parsed.sql,
+                  confirmId: parsed.confirm_id,
+                  sessionId: parsed.session_id,
+                  confirmed: null,
+                  confirming: false
+                }
               }
             } else if (parsed.type === 'tool_start') {
               // 工具开始，创建新的气泡
@@ -451,6 +466,38 @@ const fillSqlToEditor = (sql: string) => {
     ElMessage.success('SQL已填充到编辑器')
   } else {
     ElMessage.warning('请先打开数据库管理页面')
+  }
+}
+
+// SQL 确认处理（气泡内确认）
+const handleSqlConfirm = async (messageIndex: number, confirmed: boolean) => {
+  const message = aiMessages.value[messageIndex]
+  if (!message || !message.sqlConfirmRequest) return
+  
+  const confirmRequest = message.sqlConfirmRequest
+  
+  // 禁用按钮，防止重复点击
+  confirmRequest.confirming = true
+  
+  try {
+    const response = await backendAgentAPI.confirmSql({
+      session_id: confirmRequest.sessionId,
+      confirm_id: confirmRequest.confirmId,
+      confirmed: confirmed
+    })
+    
+    if (response.data.success) {
+      // 更新确认状态
+      confirmRequest.confirmed = confirmed
+      ElMessage.success(confirmed ? '✓ 已允许执行 SQL' : '✗ 已拒绝执行 SQL')
+    } else {
+      ElMessage.error(response.data.error || '确认失败')
+      confirmRequest.confirming = false
+    }
+  } catch (error: any) {
+    console.error('SQL 确认失败:', error)
+    ElMessage.error('确认失败，请重试')
+    confirmRequest.confirming = false
   }
 }
 
@@ -707,10 +754,10 @@ onUnmounted(() => {
           </div>
           <!-- 工具消息使用欢迎消息样式 -->
           <div v-else-if="message.messageType === 'tool_start' || message.messageType === 'tool_complete'" class="welcome-message">
-            <div class="feature-tip" :class="{ 'sql-tool-tip': message.name === 'generate_sql' }">
+            <div class="feature-tip" :class="{ 'sql-tool-tip': message.name === 'generate_sql', 'exec-tool-tip': message.name === 'execute_sql' }">
               <div v-if="message.messageType === 'tool_start'" class="tool-status">
                 <el-icon class="is-loading"><Loading /></el-icon>
-                <span>Invocating Tools ...</span>
+                <span class="invocating-text">Invocating Tools ...</span>
               </div>
               <div v-else-if="message.messageType === 'tool_complete'" class="tool-status" :class="{ 'tool-success': message.success !== false, 'tool-error': message.success === false }">
                 <el-icon v-if="message.success !== false" class="check-icon"><Check /></el-icon>
@@ -750,6 +797,46 @@ onUnmounted(() => {
                     </div>
                   </div>
                 </transition>
+              </div>
+              <!-- execute_sql 特殊处理 - 显示SQL确认 -->
+              <div v-if="message.sqlConfirmRequest" class="sql-confirm-wrapper">
+                <!-- 终端窗口头部 -->
+                <div class="terminal-header">
+                  <div class="terminal-title" style="text-align: left; font-weight: bold; font-style: italic;">
+                    <span v-if="message.sqlConfirmRequest.confirmed === null">⚠ Confirm Execution</span>
+                    <span v-else-if="message.sqlConfirmRequest.confirmed === true" class="terminal-success">Execution Allowed</span>
+                    <span v-else class="terminal-error">Execution Canceled</span>
+                  </div>
+                </div>
+                
+                <!-- 终端内容 -->
+                <div class="terminal-body">
+                  <div class="terminal-line">
+                    <span class="terminal-prompt">$</span>
+                    <span class="terminal-command">mysql -e</span>
+                  </div>
+                  <pre class="terminal-sql">{{ message.sqlConfirmRequest.sql }}</pre>
+                </div>
+                
+                <!-- 终端按钮 -->
+                <div v-if="message.sqlConfirmRequest.confirmed === null" class="terminal-actions">
+                  <button 
+                    class="terminal-btn terminal-btn-cancel"
+                    @click="handleSqlConfirm(index, false)" 
+                    :disabled="message.sqlConfirmRequest.confirming"
+                  >
+                    <span v-if="!message.sqlConfirmRequest.confirming">Cancel</span>
+                    <span v-else>...</span>
+                  </button>
+                  <button 
+                    class="terminal-btn terminal-btn-allow"
+                    @click="handleSqlConfirm(index, true)"
+                    :disabled="message.sqlConfirmRequest.confirming"
+                  >
+                    <span v-if="!message.sqlConfirmRequest.confirming">Allow</span>
+                    <span v-else>...</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1328,6 +1415,22 @@ onUnmounted(() => {
   justify-content: flex-start;
 }
 
+@keyframes text-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+.invocating-text {
+  font-weight: 600;
+  background: linear-gradient(90deg, #1976d2 25%, #90caf9 50%, #1976d2 75%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer 3s linear infinite;
+}
+
 .tool-complete-message .tool-status {
   color: #10b981;
 }
@@ -1743,6 +1846,176 @@ onUnmounted(() => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+// SQL 确认样式（终端风格）
+.exec-tool-tip {
+  min-width: 500px !important;
+}
+
+.sql-confirm-wrapper {
+  margin-top: 16px;
+  background: #1e1e1e;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 1px solid #333;
+  
+  // 终端窗口头部
+  .terminal-header {
+    background: #2d2d2d;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-bottom: 1px solid #3c3c3c;
+    
+    .terminal-dots {
+      display: flex;
+      gap: 6px;
+      
+      .dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        
+        &.red {
+          background: #ff5f56;
+        }
+        
+        &.yellow {
+          background: #ffbd2e;
+        }
+        
+        &.green {
+          background: #27c93f;
+        }
+      }
+    }
+    
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      color: #d4d4d4;
+      font-weight: 500;
+      
+      .terminal-success {
+        color: #4ec9b0;
+      }
+      
+      .terminal-error {
+        color: #f48771;
+      }
+    }
+  }
+  
+  // 终端内容区
+  .terminal-body {
+    background: #1e1e1e;
+    padding: 16px;
+    font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+    
+    .terminal-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      
+      .terminal-prompt {
+        color: #4ec9b0;
+        font-weight: bold;
+        font-size: 14px;
+      }
+      
+      .terminal-command {
+        color: #dcdcaa;
+        font-size: 13px;
+      }
+    }
+    
+    .terminal-sql {
+      margin: 0;
+      padding: 12px;
+      background: #252526;
+      border-radius: 4px;
+      border-left: 3px solid #007acc;
+      color: #ce9178;
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+      
+      &::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: #1e1e1e;
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: #424242;
+        border-radius: 4px;
+        
+        &:hover {
+          background: #4e4e4e;
+        }
+      }
+    }
+  }
+  
+  // 终端按钮
+  .terminal-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    padding: 12px 16px;
+    background: #252526;
+    border-top: 1px solid #3c3c3c;
+    
+    .terminal-btn {
+      padding: 6px 16px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      
+      &:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      
+      &.terminal-btn-cancel {
+        background: transparent;
+        color: #f48771;
+        border-color: #f48771;
+        
+        &:hover:not(:disabled) {
+          background: rgba(244, 135, 113, 0.1);
+          border-color: #ff6b5a;
+        }
+      }
+      
+      &.terminal-btn-allow {
+        background: #0e639c;
+        color: #ffffff;
+        border-color: #0e639c;
+        
+        &:hover:not(:disabled) {
+          background: #1177bb;
+          border-color: #1177bb;
+        }
+      }
+    }
   }
 }
 

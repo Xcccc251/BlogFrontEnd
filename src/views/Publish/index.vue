@@ -2035,7 +2035,7 @@ const stopDrag = () => {
             <div class="feature-tip">
               <div v-if="message.messageType === 'tool_start'" class="tool-status">
                 <el-icon class="is-loading"><Loading /></el-icon>
-                <span>Invocating Tools ...</span>
+                <span class="invocating-text">Invocating Tools ...</span>
               </div>
               <div v-else-if="message.messageType === 'tool_complete'" class="tool-status" :class="{ 'tool-success': message.success !== false, 'tool-error': message.success === false }">
                 <el-icon v-if="message.success !== false" class="check-icon"><Check /></el-icon>
@@ -3048,6 +3048,61 @@ const stopDrag = () => {
 .tool-start-message .tool-status {
   color: #1976d2;
   justify-content: flex-start;
+}
+
+/* Invocating Tools 反光效果 */
+.invocating-text {
+  position: relative;
+  background: linear-gradient(
+    90deg,
+    #1976d2 0%,
+    #1976d2 35%,
+    #ffffff 50%,
+    #1976d2 65%,
+    #1976d2 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine 3.5s linear infinite;
+  font-weight: 600;
+  text-shadow: 
+    0 0 10px rgba(255, 255, 255, 0.8),
+    0 0 20px rgba(25, 118, 210, 0.6),
+    0 0 30px rgba(25, 118, 210, 0.4),
+    0 2px 4px rgba(0, 0, 0, 0.3);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
+}
+
+.invocating-text::before {
+  content: 'Invocating Tools ...';
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 35%,
+    rgba(255, 255, 255, 0.9) 50%,
+    transparent 65%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine 3.5s linear infinite;
+  filter: blur(1px);
+}
+
+@keyframes shine {
+  0% {
+    background-position: 200% center;
+  }
+  100% {
+    background-position: -200% center;
+  }
 }
 
 .tool-complete-message .tool-status {

@@ -154,6 +154,11 @@ export const backendAgentAPI = {
   getModels() {
     return api.get('/agent/models')
   },
+
+  // SQL 确认
+  confirmSql(data: { session_id: string; confirm_id: string; confirmed: boolean }) {
+    return api.post('/backend/agent/confirm-sql', data)
+  },
 }
 
 
