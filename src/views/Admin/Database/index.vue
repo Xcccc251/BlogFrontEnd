@@ -107,40 +107,12 @@ const loadDatabaseStats = async () => {
   }
 }
 
-const SEPARATORS = ' \n\r\t,();=><!*+-/`"\'[]{}'
 
-const containsDangerousKeyword = (sql: string, keyword: string) => {
-  let index = sql.indexOf(keyword)
-  while (index !== -1) {
-    const beforeChar = index === 0 ? '' : sql[index - 1]
-    const afterIndex = index + keyword.length
-    const afterChar = afterIndex >= sql.length ? '' : sql[afterIndex]
-    const beforeOK = index === 0 || SEPARATORS.includes(beforeChar)
-    const afterOK = afterIndex === sql.length || SEPARATORS.includes(afterChar)
-
-    if (beforeOK && afterOK) {
-      return true
-    }
-
-    index = sql.indexOf(keyword, index + keyword.length)
-  }
-
-  return false
-}
 
 // 执行SQL查询
 const handleExecuteQuery = async () => {
   if (!sqlQuery.value.trim()) {
     ElMessage.warning('请输入SQL查询语句')
-    return
-  }
-
-  // 简单的SQL注入防护检查
-  const sql = sqlQuery.value.trim().toLowerCase()
-  const dangerousKeywords = ['drop', 'delete', 'truncate', 'update', 'insert', 'alter']
-  const hasDangerousKeyword = dangerousKeywords.some(keyword => containsDangerousKeyword(sql, keyword))
-  if (hasDangerousKeyword) {
-    ElMessage.error('仅支持SELECT查询语句，不允许执行修改操作')
     return
   }
 
@@ -341,7 +313,7 @@ const resultStats = computed(() => {
                   v-model="sqlQuery"
                   type="textarea"
                   :rows="12"
-                  placeholder="请输入SQL查询语句（仅支持SELECT查询）&#10;例如：SELECT * FROM users LIMIT 10;"
+                  placeholder="请输入SQL查询语句&#10;例如：SELECT * FROM users LIMIT 10;"
                   class="sql-textarea"
                 />
                 <div class="query-hint">
@@ -351,7 +323,8 @@ const resultStats = computed(() => {
                     :closable="false"
                     show-icon
                   >
-                    为了数据安全，仅支持SELECT查询语句。DROP、DELETE、UPDATE、INSERT等修改操作将不被允许。
+                    AI也会犯错，请务必仔细检查SQL语句，确认无误后再执行。
+                    操作不可撤销，请谨慎操作！
                   </el-alert>
                 </div>
               </div>

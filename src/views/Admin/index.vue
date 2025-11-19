@@ -175,6 +175,8 @@ const sendAiStreamMessage = async (message: string) => {
     message,
     currentSessionId.value, // 使用当前会话ID
     selectedModel.value
+    // 暂时不传递 permission 参数，因为后端 API 尚未支持
+    // selectedPermission.value
   )
   
   if (!response.ok) {
@@ -550,6 +552,40 @@ const selectModel = (model: string) => {
   showModelDropdown.value = false
 }
 
+// 权限级别选择相关
+const permissionLevels = [
+  { value: 'read', label: 'All actions required approval', displayLabel: 'Auto(Low)', icon: 'fa-eye', color: '#67c23a' },
+  { value: 'write', label: 'Query Only', displayLabel: 'Auto(Middle)', icon: 'fa-pen', color: '#e6a23c' },
+  { value: 'admin', label: 'Allow all actions', displayLabel: 'Auto(High)', icon: 'fa-shield-alt', color: '#f56c6c' }
+]
+const selectedPermission = ref('read')
+const showPermissionDropdown = ref(false)
+
+const togglePermissionDropdown = () => {
+  showPermissionDropdown.value = !showPermissionDropdown.value
+}
+
+const selectPermission = (level: string) => {
+  selectedPermission.value = level
+  showPermissionDropdown.value = false
+}
+
+const getSelectedPermissionLabel = () => {
+  return permissionLevels.find(p => p.value === selectedPermission.value)?.displayLabel || 'Auto(Low)'
+}
+
+const getSelectedPermissionDescription = () => {
+  return permissionLevels.find(p => p.value === selectedPermission.value)?.label || 'All actions required approval'
+}
+
+const getSelectedPermissionIcon = () => {
+  return permissionLevels.find(p => p.value === selectedPermission.value)?.icon || 'fa-eye'
+}
+
+const getSelectedPermissionColor = () => {
+  return permissionLevels.find(p => p.value === selectedPermission.value)?.color || '#67c23a'
+}
+
 // 获取当前选中模型的显示名称
 const getSelectedModelName = () => {
   const modelInfo = availableModels.value.find((m: any) => m.model === selectedModel.value)
@@ -571,9 +607,10 @@ const handleIconError = (event: Event) => {
 // 点击外部关闭下拉框
 const handleClickOutside = (event: Event) => {
   const target = event.target as HTMLElement
-  if (!target.closest('.mode-selector') && !target.closest('.model-selector')) {
+  if (!target.closest('.mode-selector') && !target.closest('.model-selector') && !target.closest('.permission-selector')) {
     showModeDropdown.value = false
     showModelDropdown.value = false
+    showPermissionDropdown.value = false
   }
 }
 
@@ -717,17 +754,17 @@ onUnmounted(() => {
       <div ref="aiChatMessages" class="ai-chat-messages">
         <div v-if="aiMessages.length === 0" class="welcome-message">
           <div class="feature-tip">
-            <p><strong>🔍 数据库查询助手</strong></p>
-            <p>我可以帮助你：</p>
+            <p><strong>👋 AI 智能管理助手</strong></p>
+            <p>我可以协助您管理整个后台系统：</p>
             <ul style="text-align: left; margin: 10px 0; padding-left: 30px;">
-              <li>查看数据库表结构</li>
-              <li>编写SQL查询语句</li>
-              <li>执行安全的SELECT查询</li>
-              <li>分析查询结果</li>
-              <li>获取数据库统计信息</li>
+              <li>📝 文章与内容管理</li>
+              <li>🗄️ 数据库查询与维护</li>
+              <li>📊 数据统计与分析</li>
+              <li>🔧 自动化管理任务</li>
+              <li>💡 解答系统使用问题</li>
             </ul>
             <p style="color: #999; font-size: 0.85rem; margin-top: 10px;">
-              💡 提示：所有查询都是只读的，不会修改数据库
+              💡 提示：无论在哪个页面，我都可以为您提供相关的协助
             </p>
           </div>
         </div>
@@ -850,12 +887,29 @@ onUnmounted(() => {
       <div class="ai-chat-input-container">
         <div class="ai-input-wrapper">
           <!-- Admin页面使用专门的SQL查询助手，不需要模式选择器 -->
+          <div class="permission-selector">
+            <div class="permission-dropdown" @click="togglePermissionDropdown" :class="{ active: showPermissionDropdown }">
+              <span class="permission-text">{{ getSelectedPermissionLabel() }}</span>
+              <i class="fas fa-chevron-down permission-arrow"></i>
+            </div>
+            <div class="permission-options" v-show="showPermissionDropdown">
+              <div 
+                v-for="level in permissionLevels" 
+                :key="level.value"
+                class="permission-option" 
+                @click="selectPermission(level.value)" 
+                :class="{ active: selectedPermission === level.value }"
+              >
+                <span class="option-text"><strong>{{ level.displayLabel }}</strong> {{ level.label }}</span>
+              </div>
+            </div>
+          </div>
           
           <textarea 
             ref="aiMessageInput"
             v-model="aiInputMessage"
             class="ai-message-input"
-            placeholder="Ask Anything ..." 
+            :placeholder="`Agent (${getSelectedPermissionDescription()})...`" 
             rows="1"
             @keydown="handleAiKeyDown"
             @input="autoResizeAiInput"
@@ -1742,6 +1796,105 @@ onUnmounted(() => {
 
 .ai-input-wrapper .option-text {
   font-weight: 500;
+}
+
+// 权限选择器样式
+.permission-selector {
+  position: relative;
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.permission-dropdown {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 20px;
+  background: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+  justify-content: center;
+  
+  &:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+  }
+  
+  &.active {
+    background: #e3f2fd;
+    border-color: #007bff;
+  }
+}
+
+.permission-text {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+}
+
+.permission-arrow {
+  font-size: 0.8rem;
+  color: #666;
+  transition: transform 0.2s ease;
+}
+
+.permission-dropdown.active .permission-arrow {
+  transform: rotate(180deg);
+}
+
+.permission-options {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  width: max-content;
+  min-width: 200px;
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+.permission-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-size: 0.9rem;
+  color: #333333;
+  white-space: nowrap;
+  
+  &:hover {
+    background: #f8f9fa;
+  }
+  
+  &.active {
+    background: #e3f2fd;
+    color: #1976d2;
+    font-weight: 500;
+  }
+  
+  &:not(:last-child) {
+    border-bottom: 1px solid #f0f0f0;
+  }
+  
+  .option-icon {
+    width: 20px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+  
+  .option-text {
+    flex: 1;
+  }
 }
 
 .ai-message-input {

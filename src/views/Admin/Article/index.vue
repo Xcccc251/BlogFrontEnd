@@ -8,10 +8,9 @@ import {
   deleteArticle,
   updateArticleStatus,
   updateArticleTop,
-  articleCategory,
-  articleTag
+  articleCategory
 } from '@/apis/article'
-import type { CategoryType, TagType } from '@/views/Publish/type'
+import type { CategoryType } from '@/views/Publish/type'
 
 // 文章项类型
 interface ArticleItem {
@@ -31,7 +30,6 @@ interface ArticleItem {
 // 表单数据
 const formData = reactive({
   categoryId: undefined,
-  tagId: undefined,
   articleTitle: '',
   articleType: undefined,
   isTop: undefined,
@@ -54,13 +52,11 @@ const pagination = reactive({
 
 // 分类和标签列表
 const categoryList = ref<CategoryType[]>([])
-const tagList = ref<TagType[]>([])
 
 // 初始化
 onMounted(async () => {
   await refreshData()
   await loadCategories()
-  await loadTags()
 })
 
 // 加载分类
@@ -72,18 +68,6 @@ const loadCategories = async () => {
     }
   } catch (error) {
     console.error('加载分类失败', error)
-  }
-}
-
-// 加载标签
-const loadTags = async () => {
-  try {
-    const res: any = await articleTag()
-    if (res.code === 200) {
-      tagList.value = res.data
-    }
-  } catch (error) {
-    console.error('加载标签失败', error)
   }
 }
 
@@ -151,7 +135,6 @@ const handleSearch = async () => {
 const handleReset = () => {
   Object.assign(formData, {
     categoryId: undefined,
-    tagId: undefined,
     articleTitle: '',
     articleType: undefined,
     isTop: undefined,
@@ -307,21 +290,6 @@ const getArticleTypeText = (type: number) => {
                 v-for="item in categoryList"
                 :key="item.id"
                 :label="item.categoryName"
-                :value="item.id"
-              />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="标签">
-            <el-select
-              v-model="formData.tagId"
-              placeholder="请选择标签"
-              clearable
-              style="width: 150px"
-            >
-              <el-option
-                v-for="item in tagList"
-                :key="item.id"
-                :label="item.tagName"
                 :value="item.id"
               />
             </el-select>
