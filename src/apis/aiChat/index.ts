@@ -116,7 +116,7 @@ export const agentAPI = {
 // 后台Agent API（用于Admin页面，提供SQL查询工具）
 export const backendAgentAPI = {
   // 发送消息（流式响应）- 用于admin页面的SQL查询助手
-  sendMessage(userMessage: string, sessionId: string | null, model: string) {
+  sendMessage(userMessage: string, sessionId: string | null, model: string, level: number, currentPage: string) {
     return fetch('/api/backend/agent/chat', {
       method: 'POST',
       headers: {
@@ -125,7 +125,9 @@ export const backendAgentAPI = {
       body: JSON.stringify({
         user_message: userMessage,
         session_id: sessionId,
-        model: model
+        model: model,
+        level: level,
+        current_page: currentPage
       })
     })
   },

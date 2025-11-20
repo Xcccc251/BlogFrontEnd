@@ -174,9 +174,9 @@ const sendAiStreamMessage = async (message: string) => {
   const response = await backendAgentAPI.sendMessage(
     message,
     currentSessionId.value, // 使用当前会话ID
-    selectedModel.value
-    // 暂时不传递 permission 参数，因为后端 API 尚未支持
-    // selectedPermission.value
+    selectedModel.value,
+    getPermissionLevel(), // 传递权限等级：read=1, write=2, admin=3
+    activeMenu.value // 传递当前页面：article/category/tag等
   )
   
   if (!response.ok) {
@@ -269,6 +269,27 @@ const sendAiStreamMessage = async (message: string) => {
                   confirmed: null,
                   confirming: false
                 }
+                
+                // 根据权限等级自动确认SQL
+                const currentLevel = getPermissionLevel()
+                const sql = parsed.sql.trim().toUpperCase()
+                const isSelectQuery = sql.startsWith('SELECT') || sql.startsWith('SHOW') || sql.startsWith('DESCRIBE') || sql.startsWith('EXPLAIN')
+                
+                let shouldAutoConfirm = false
+                if (currentLevel === 3) {
+                  // high等级：全部自动接受
+                  shouldAutoConfirm = true
+                } else if (currentLevel === 2 && isSelectQuery) {
+                  // middle等级：查询类型自动接受
+                  shouldAutoConfirm = true
+                }
+                
+                if (shouldAutoConfirm) {
+                  // 自动确认
+                  setTimeout(() => {
+                    handleSqlConfirm(messageIndex, true)
+                  }, 100)
+                }
               }
             } else if (parsed.type === 'tool_start') {
               // 工具开始，创建新的气泡
@@ -326,7 +347,7 @@ const sendAiStreamMessage = async (message: string) => {
                           fillSqlCallback.value(toolData.sql)
                         }
                       } else if (toolName === 'execute_sql') {
-                        summary = 'EXEC: 执行SQL查询'
+                        summary = 'EXEC: 执行SQL'
                       } else if (toolName === 'analyze_query_result') {
                         summary = 'ANALYZE: 分析结果'
                       } else if (toolName === 'get_database_stats') {
@@ -584,6 +605,16 @@ const getSelectedPermissionIcon = () => {
 
 const getSelectedPermissionColor = () => {
   return permissionLevels.find(p => p.value === selectedPermission.value)?.color || '#67c23a'
+}
+
+// 获取权限等级对应的数字：read->1, write->2, admin->3
+const getPermissionLevel = () => {
+  const levelMap: Record<string, number> = {
+    'read': 1,
+    'write': 2,
+    'admin': 3
+  }
+  return levelMap[selectedPermission.value] || 1
 }
 
 // 获取当前选中模型的显示名称
