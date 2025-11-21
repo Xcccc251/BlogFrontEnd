@@ -439,30 +439,32 @@ const getArticleTypeText = (type: number) => {
 
 <style scoped lang="scss">
 .article-manage {
-  padding: 20px;
-  height: 100%;
-  overflow: auto;
+  /* padding is handled by admin-content */
 }
 
 .main-card {
   border-radius: 8px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.3s;
+  
+  &:hover {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.04);
+  }
 }
 
 .header-section {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .search-form {
   :deep(.el-form-item) {
-    margin-bottom: 12px;
-    margin-right: 12px;
+    margin-bottom: 16px;
+    margin-right: 16px;
   }
   
   :deep(.el-button) {
-    margin-right: 8px;
-    margin-top: 4px;
-    margin-bottom: 4px;
+    margin-right: 12px;
     
     &:last-of-type {
       margin-right: 0;
@@ -471,26 +473,34 @@ const getArticleTypeText = (type: number) => {
 }
 
 .selected-tip {
-  margin-left: 10px;
+  margin-left: 12px;
   color: #409eff;
   font-size: 14px;
 }
 
 :deep(.el-card__body) {
-  padding: 20px;
+  padding: 24px;
 }
 
 :deep(.el-table) {
   font-size: 14px;
   
-  th {
-    background: #fafafa;
-    color: #666;
-    font-weight: 500;
+  // 表头样式
+  th.el-table__cell {
+    background-color: #f5f7fa;
+    color: #606266;
+    font-weight: 600;
+    height: 45px;
   }
   
-  .el-table__body tr:hover > td {
-    background: #fafafa !important;
+  // 斑马纹样式
+  &.el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+    background: #fafafa;
+  }
+  
+  // 悬停样式
+  .el-table__body tr:hover > td.el-table__cell {
+    background-color: #f0f9eb !important;
   }
 }
 
@@ -502,12 +512,12 @@ const getArticleTypeText = (type: number) => {
 .action-buttons {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-wrap: nowrap;
   white-space: nowrap;
   
   :deep(.el-button) {
-    padding: 0 8px;
+    padding: 4px 8px;
     margin: 0;
   }
 }
@@ -515,6 +525,8 @@ const getArticleTypeText = (type: number) => {
 .pagination-container {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f2f5;
 }
 </style>

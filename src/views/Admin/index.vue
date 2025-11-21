@@ -26,49 +26,97 @@ const isLoggedIn = computed(() => {
   return userStore.userInfo !== undefined && userStore.userInfo !== null
 })
 
-// 菜单项
-const menuItems = [
+// 菜单分组展开状态
+const groupExpandState = ref({
+  website: true,
+  system: true,
+  data: true
+})
+
+// 切换分组展开/收起
+const toggleGroup = (groupKey: string) => {
+  groupExpandState.value[groupKey as keyof typeof groupExpandState.value] = !groupExpandState.value[groupKey as keyof typeof groupExpandState.value]
+}
+
+// 菜单分组
+const menuGroups = [
   {
-    key: 'article',
-    label: '文章管理',
-    icon: Document,
-    path: '/admin/article'
+    groupName: '网站管理',
+    groupKey: 'website',
+    items: [
+      {
+        key: 'article',
+        label: '文章管理',
+        icon: Document,
+        path: '/admin/article'
+      },
+      {
+        key: 'category',
+        label: '分类管理',
+        icon: FolderOpened,
+        path: '/admin/category'
+      },
+      {
+        key: 'tag',
+        label: '标签管理',
+        icon: Collection,
+        path: '/admin/tag'
+      },
+      {
+        key: 'comment',
+        label: '评论管理',
+        icon: ChatDotSquare,
+        path: '/admin/comment'
+      },
+      {
+        key: 'favorite',
+        label: '收藏管理',
+        icon: Star,
+        path: '/admin/favorite'
+      }
+    ]
   },
   {
-    key: 'category',
-    label: '分类管理',
-    icon: FolderOpened,
-    path: '/admin/category'
+    groupName: '系统管理',
+    groupKey: 'system',
+    items: [
+      {
+        key: 'user',
+        label: '用户管理',
+        icon: DocumentCopy,
+        path: '/admin/user'
+      },
+      {
+        key: 'role',
+        label: '角色管理',
+        icon: Collection,
+        path: '/admin/role'
+      },
+      {
+        key: 'permission',
+        label: '权限管理',
+        icon: Warning,
+        path: '/admin/permission'
+      }
+    ]
   },
   {
-    key: 'tag',
-    label: '标签管理',
-    icon: Collection,
-    path: '/admin/tag'
-  },
-  {
-    key: 'comment',
-    label: '评论管理',
-    icon: ChatDotSquare,
-    path: '/admin/comment'
-  },
-  {
-    key: 'favorite',
-    label: '收藏管理',
-    icon: Star,
-    path: '/admin/favorite'
-  },
-  {
-    key: 'database',
-    label: '数据库管理',
-    icon: Coin,
-    path: '/admin/database'
-  },
-  {
-    key: 'graph',
-    label: '知识图谱',
-    icon: Connection,
-    path: '/admin/graph'
+    groupName: '数据管理',
+    groupKey: 'data',
+    items: [
+      {
+        key: 'database',
+        label: '数据库管理',
+        icon: Coin,
+        path: '/admin/database'
+      },
+      {
+        key: 'graph',
+        label: '知识图谱',
+        icon: Connection,
+        path: '/admin/graph'
+      }
+    ]
   }
 ]
 
@@ -714,17 +762,36 @@ onUnmounted(() => {
         <h2>后台管理</h2>
       </div>
       <div class="sidebar-menu">
-        <div
-          v-for="item in menuItems"
-          :key="item.key"
-          class="menu-item"
-          :class="{ active: activeMenu === item.key }"
-          @click="handleMenuClick(item)"
+        <div 
+          v-for="group in menuGroups" 
+          :key="group.groupKey"
+          class="menu-group"
         >
-          <el-icon class="menu-icon">
-            <component :is="item.icon" />
-          </el-icon>
-          <span class="menu-label">{{ item.label }}</span>
+          <div 
+            class="group-title" 
+            @click="toggleGroup(group.groupKey)"
+          >
+            <span class="group-title-text">{{ group.groupName }}</span>
+            <el-icon class="group-arrow" :class="{ expanded: groupExpandState[group.groupKey] }">
+              <ArrowRight />
+            </el-icon>
+          </div>
+          <transition name="group-expand">
+            <div v-show="groupExpandState[group.groupKey]" class="group-items">
+              <div
+                v-for="item in group.items"
+                :key="item.key"
+                class="menu-item"
+                :class="{ active: activeMenu === item.key }"
+                @click="handleMenuClick(item)"
+              >
+                <el-icon class="menu-icon">
+                  <component :is="item.icon" />
+                </el-icon>
+                <span class="menu-label">{{ item.label }}</span>
+              </div>
+            </div>
+          </transition>
         </div>
       </div>
     </div>
@@ -954,12 +1021,45 @@ onUnmounted(() => {
           </button>
         </div>
         <div class="ai-input-footer">
-          <span class="ai-typing-indicator" v-if="isAiTyping">
-            <i class="fas fa-circle"></i>
-            <i class="fas fa-circle"></i>
-            <i class="fas fa-circle"></i>
-            Streaming ...
-          </span>
+          <div class="ai-typing-indicator" v-if="isAiTyping">
+            <svg viewBox="0 0 420 100" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <!-- 文字形状 Mask -->
+                <clipPath id="text-mask">
+                  <text x="80" y="65" font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="48">Streaming</text>
+                </clipPath>
+
+                <linearGradient id="shine-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="white" stop-opacity="0" />
+                  <stop offset="40%" stop-color="white" stop-opacity="0" />
+                  <stop offset="50%" stop-color="white" stop-opacity="0.8" />
+                  <stop offset="60%" stop-color="white" stop-opacity="0" />
+                  <stop offset="100%" stop-color="white" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+
+              <!-- 1. 左侧旋转加载环 -->
+              <circle class="spinner" cx="40" cy="50" r="14" 
+                      fill="none" stroke="#1a1a1a" stroke-width="4" 
+                      stroke-linecap="round" 
+                      stroke-dasharray="65" stroke-dashoffset="20" />
+
+              <!-- 2. 基础文字层 -->
+              <text x="80" y="65" font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="48" fill="#1a1a1a">Streaming</text>
+
+              <!-- 3. 反光层 -->
+              <g clip-path="url(#text-mask)">
+                <rect class="shine-layer" x="0" y="0" width="420" height="100" fill="url(#shine-gradient)" />
+              </g>
+
+              <!-- 4. 右侧跳动点 -->
+              <g transform="translate(330, 65)">
+                <circle class="loading-dot" cx="0" cy="-5" r="4" />
+                <circle class="loading-dot" cx="15" cy="-5" r="4" />
+                <circle class="loading-dot" cx="30" cy="-5" r="4" />
+              </g>
+            </svg>
+          </div>
         </div>
       </div>
     </div>
@@ -977,71 +1077,178 @@ onUnmounted(() => {
 .admin-sidebar {
   width: 200px;
   background: white;
-  border-right: 1px solid #e8e8e8;
+  border-right: 1px solid #f0f2f5;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.05);
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.02);
+  z-index: 10;
 }
 
 .sidebar-header {
   padding: 20px;
-  border-bottom: 1px solid #e8e8e8;
+  border-bottom: 1px solid #f0f2f5;
 
   h2 {
     margin: 0;
     font-size: 18px;
-    color: #333;
+    color: #303133;
     font-weight: 600;
   }
 }
 
 .sidebar-menu {
   flex: 1;
-  padding: 10px 0;
+  padding: 8px 0;
+  overflow-y: auto;
+  
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  
+  &::-webkit-scrollbar-thumb {
+    background: #dcdfe6;
+    border-radius: 2px;
+    
+    &:hover {
+      background: #c0c4cc;
+    }
+  }
+}
+
+.menu-group {
+  margin-bottom: 16px;
+  
+  &:last-child {
+    margin-bottom: 8px;
+  }
+}
+
+.group-title {
+  padding: 10px 16px;
+  font-size: 12px;
+  color: #909399;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.2s ease;
+  border-radius: 6px;
+  user-select: none;
+  
+  &:hover {
+    background: rgba(64, 158, 255, 0.05);
+    color: #606266;
+    
+    .group-arrow {
+      color: #409eff;
+    }
+  }
+  
+  &::after {
+    content: '';
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 0;
+    height: 1px;
+    background: linear-gradient(to right, #e4e7ed 0%, transparent 100%);
+  }
+  
+  .group-title-text {
+    flex: 1;
+  }
+  
+  .group-arrow {
+    font-size: 14px;
+    transition: transform 0.3s ease;
+    color: #c0c4cc;
+    
+    &.expanded {
+      transform: rotate(90deg);
+    }
+  }
+}
+
+.group-items {
+  overflow: hidden;
+}
+
+// 分组展开动画
+.group-expand-enter-active,
+.group-expand-leave-active {
+  transition: all 0.3s ease;
+  max-height: 500px;
+}
+
+.group-expand-enter-from,
+.group-expand-leave-to {
+  opacity: 0;
+  max-height: 0;
+  transform: translateY(-10px);
+}
+
+.group-expand-enter-to,
+.group-expand-leave-from {
+  opacity: 1;
+  max-height: 500px;
+  transform: translateY(0);
 }
 
 .menu-item {
   display: flex;
   align-items: center;
-  padding: 14px 20px;
-  margin: 4px 8px;
+  padding: 12px 16px 12px 24px;
+  margin: 2px 8px;
   cursor: pointer;
-  transition: all 0.3s;
-  color: #666;
-  border-radius: 6px;
+  transition: all 0.3s ease;
+  color: #606266;
+  border-radius: 8px;
   position: relative;
+  font-size: 14px;
 
   &:hover {
-    background: #f5f7fa;
+    background: linear-gradient(to right, #f5f7fa 0%, #fafbfc 100%);
     color: #409eff;
+    transform: translateX(2px);
   }
 
   &.active {
-    background: linear-gradient(90deg, #e6f7ff 0%, #f0f9ff 100%);
+    background: linear-gradient(135deg, #ecf5ff 0%, #e6f2ff 100%);
     color: #409eff;
     font-weight: 500;
+    box-shadow: 0 2px 4px rgba(64, 158, 255, 0.1);
     
     &::before {
       content: '';
       position: absolute;
-      left: 0;
+      left: 8px;
       top: 50%;
       transform: translateY(-50%);
       width: 3px;
-      height: 24px;
-      background: #409eff;
-      border-radius: 0 2px 2px 0;
+      height: 18px;
+      background: linear-gradient(to bottom, #409eff, #66b1ff);
+      border-radius: 2px;
+      box-shadow: 0 0 4px rgba(64, 158, 255, 0.3);
     }
   }
 
   .menu-icon {
-    font-size: 18px;
-    margin-right: 12px;
+    font-size: 17px;
+    margin-right: 10px;
+    flex-shrink: 0;
   }
 
   .menu-label {
-    font-size: 14px;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
@@ -1049,6 +1256,7 @@ onUnmounted(() => {
   overflow: auto;
   background: #F0F8FF;
   transition: width 0.1s ease;
+  padding: 20px;
 }
 
 // 分割器
@@ -1102,17 +1310,19 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   background: white;
-  border-left: 1px solid #e8e8e8;
+  border-left: 1px solid #f0f2f5;
   transition: width 0.1s ease;
   overflow: hidden;
+  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.02);
 }
 
 .ai-chat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #e8e8e8;
+  padding: 15px 20px;
+  border-bottom: 1px solid #f0f2f5;
+  background: #fff;
   
   .ai-title-section {
     display: flex;
@@ -1121,7 +1331,7 @@ onUnmounted(() => {
     h3 {
       margin: 0;
       color: #303133;
-      font-size: 1.2rem;
+      font-size: 1.1rem;
     }
   }
   
@@ -1142,47 +1352,48 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
-  border: 1px solid #e5e5e5;
+  padding: 6px 12px;
+  border: 1px solid #dcdfe6;
   border-radius: 20px;
-  background: #f8f9fa;
+  background: #fff;
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 120px;
   
   &:hover {
-    background: #e9ecef;
-    border-color: #007bff;
+    background: #f5f7fa;
+    border-color: #c0c4cc;
   }
   
   &.active {
-    background: #e3f2fd;
-    border-color: #007bff;
+    background: #ecf5ff;
+    border-color: #409eff;
   }
 }
 
 .model-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   object-fit: contain;
   flex-shrink: 0;
 }
 
 .model-text {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 500;
-  color: #333333;
+  color: #606266;
   white-space: nowrap;
 }
 
 .model-arrow {
   font-size: 0.8rem;
-  color: #666;
+  color: #909399;
   transition: transform 0.2s ease;
 }
 
 .model-dropdown.active .model-arrow {
   transform: rotate(180deg);
+  color: #409eff;
 }
 
 .model-options {
@@ -1191,9 +1402,9 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   background: white;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #e4e7ed;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
   z-index: 1000;
   margin-top: 4px;
   overflow: hidden;
@@ -1206,32 +1417,28 @@ onUnmounted(() => {
   padding: 10px 12px;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  font-size: 0.9rem;
-  color: #333333;
+  font-size: 0.85rem;
+  color: #606266;
   
   &:hover {
-    background: #f8f9fa;
+    background: #f5f7fa;
   }
   
   &.active {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #ecf5ff;
+    color: #409eff;
     font-weight: 500;
   }
   
   &:not(:last-child) {
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #ebeef5;
   }
   
   .option-icon {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     object-fit: contain;
     flex-shrink: 0;
-  }
-  
-  .option-text {
-    font-weight: 500;
   }
 }
 
@@ -1265,6 +1472,7 @@ onUnmounted(() => {
     background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);
     border-radius: 8px;
     border-left: 4px solid #2196f3;
+    box-shadow: none;
     
     p {
       margin: 5px 0;
@@ -1273,7 +1481,16 @@ onUnmounted(() => {
       
       &:first-child {
         font-weight: 500;
+        font-size: 0.85rem;
+        margin-bottom: 0;
       }
+    }
+    
+    ul {
+        color: inherit;
+        li {
+            margin-bottom: 0;
+        }
     }
   }
 }
@@ -1350,31 +1567,32 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 12px 45px;
+  padding: 10px 16px 10px 40px;
   cursor: pointer;
   user-select: none;
   transition: background 0.2s ease;
   position: relative;
   
   &:hover {
-    background: rgba(251, 191, 36, 0.1);
+    background: rgba(250, 236, 216, 0.5);
   }
   
   &::before {
     content: '💭';
     position: absolute;
-    left: 15px;
+    left: 12px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 1.2rem;
+    font-size: 1rem;
+    opacity: 0.8;
   }
 }
 
 .thinking-title {
   font-weight: 500;
   font-style: italic;
-  font-size: 0.95rem;
-  color: #666666;
+  font-size: 0.9rem;
+  color: #909399;
 }
 
 .thinking-toggle {
@@ -1382,6 +1600,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   transition: transform 0.3s ease;
+  color: #909399;
   
   .el-icon {
     transition: transform 0.3s ease;
@@ -1393,11 +1612,12 @@ onUnmounted(() => {
 }
 
 .thinking-content {
-  padding: 0 16px 16px 45px;
+  padding: 0 16px 16px 40px;
   font-style: italic;
   line-height: 1.6;
   overflow: hidden;
-  color: #666666;
+  color: #606266;
+  font-size: 0.9rem;
 }
 
 /* Transition动画 */
@@ -1459,22 +1679,14 @@ onUnmounted(() => {
   width: 100%;
 }
 
-.tool-start-message .welcome-message {
-  width: fit-content;
-  border-radius: 10px;
-  margin: 0;
-}
-
+.tool-start-message .welcome-message,
 .tool-complete-message .welcome-message {
   width: fit-content;
   border-radius: 10px;
   margin: 0;
 }
 
-.tool-start-message .feature-tip {
-  width: fit-content;
-}
-
+.tool-start-message .feature-tip,
 .tool-complete-message .feature-tip {
   width: fit-content;
 }
@@ -1519,6 +1731,8 @@ onUnmounted(() => {
 .tool-complete-message .tool-status {
   color: #10b981;
 }
+
+/* .tool-complete-message .feature-tip {} */
 
 /* 对号图标动画效果 */
 .check-icon {
@@ -1570,6 +1784,12 @@ onUnmounted(() => {
   color: #ef4444;
   justify-content: flex-start;
 }
+
+/* .tool-status.tool-error .feature-tip {
+    background: #fef0f0;
+    border-color: #fde2e2;
+    border-left-color: #f56c6c;
+} */
 
 /* SQL详情展示样式 */
 .sql-tool-tip {
@@ -1686,8 +1906,8 @@ onUnmounted(() => {
 /* 不同类型消息的样式 */
 .content-message .ai-message-content {
   background: #ffffff;
-  border: 1px solid #e5e5e5;
-  color: #333333;
+  border: 1px solid #ebeef5;
+  color: #303133;
   border-radius: 18px;
 }
 
@@ -1709,9 +1929,10 @@ onUnmounted(() => {
 
 // AI输入区域
 .ai-chat-input-container {
-  padding: 20px;
+  padding: 16px 20px;
   background: #ffffff;
   flex-shrink: 0;
+  border-top: 1px solid #f0f2f5;
 }
 
 .ai-input-wrapper {
@@ -1734,21 +1955,20 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #dcdfe6;
   border-radius: 20px;
-  background: #f8f9fa;
+  background: #f5f7fa;
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 100px;
   
   &:hover {
-    background: #e9ecef;
-    border-color: #007bff;
+    background: #e4e7ed;
   }
   
   &.active {
-    background: #e3f2fd;
-    border-color: #007bff;
+    background: #ecf5ff;
+    border-color: #409eff;
   }
 }
 
@@ -1764,13 +1984,13 @@ onUnmounted(() => {
 .ai-input-wrapper .mode-text {
   font-size: 0.9rem;
   font-weight: 500;
-  color: #333333;
+  color: #606266;
   white-space: nowrap;
 }
 
 .ai-input-wrapper .mode-arrow {
   font-size: 0.8rem;
-  color: #666;
+  color: #909399;
   transition: transform 0.2s ease;
 }
 
@@ -1784,9 +2004,9 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   background: white;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #dcdfe6;
   border-radius: 8px;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
   z-index: 1000;
   margin-bottom: 4px;
   overflow: hidden;
@@ -1800,20 +2020,20 @@ onUnmounted(() => {
   cursor: pointer;
   transition: background-color 0.2s ease;
   font-size: 0.9rem;
-  color: #333333;
+  color: #606266;
   
   &:hover {
-    background: #f8f9fa;
+    background: #f5f7fa;
   }
   
   &.active {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #ecf5ff;
+    color: #409eff;
     font-weight: 500;
   }
   
   &:not(:last-child) {
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #ebeef5;
   }
 }
 
@@ -1841,35 +2061,35 @@ onUnmounted(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #dcdfe6;
   border-radius: 20px;
-  background: #f8f9fa;
+  background: #f5f7fa;
   cursor: pointer;
   transition: all 0.2s ease;
   min-width: 100px;
   justify-content: center;
   
   &:hover {
-    background: #e9ecef;
-    border-color: #007bff;
+    background: #e4e7ed;
+    border-color: #c0c4cc;
   }
   
   &.active {
-    background: #e3f2fd;
-    border-color: #007bff;
+    background: #ecf5ff;
+    border-color: #409eff;
   }
 }
 
 .permission-text {
   font-size: 0.85rem;
   font-weight: 500;
-  color: #333;
+  color: #606266;
   white-space: nowrap;
 }
 
 .permission-arrow {
   font-size: 0.8rem;
-  color: #666;
+  color: #909399;
   transition: transform 0.2s ease;
 }
 
@@ -1884,9 +2104,9 @@ onUnmounted(() => {
   width: max-content;
   min-width: 200px;
   background: white;
-  border: 1px solid #e5e5e5;
+  border: 1px solid #dcdfe6;
   border-radius: 8px;
-  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.08);
   z-index: 1000;
   margin-bottom: 4px;
   overflow: hidden;
@@ -1900,21 +2120,21 @@ onUnmounted(() => {
   cursor: pointer;
   transition: background-color 0.2s ease;
   font-size: 0.9rem;
-  color: #333333;
+  color: #606266;
   white-space: nowrap;
   
   &:hover {
-    background: #f8f9fa;
+    background: #f5f7fa;
   }
   
   &.active {
-    background: #e3f2fd;
-    color: #1976d2;
+    background: #ecf5ff;
+    color: #409eff;
     font-weight: 500;
   }
   
   &:not(:last-child) {
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid #ebeef5;
   }
   
   .option-icon {
@@ -1930,39 +2150,39 @@ onUnmounted(() => {
 
 .ai-message-input {
   flex: 1;
-  border: 1px solid #e5e5e5;
-  border-radius: 30px;
-  padding: 12px 50px 12px 16px;
-  font-size: 0.9rem;
+  border: 1px solid #dcdfe6;
+  border-radius: 20px;
+  padding: 10px 45px 10px 16px;
+  font-size: 0.95rem;
   resize: none;
   outline: none;
   transition: all 0.2s ease;
   font-family: inherit;
   line-height: 1.5;
-  min-height: 45px;
+  min-height: 42px;
   max-height: 100px;
-  background: #f8f9fa;
+  background: #f9fafc;
   box-sizing: border-box;
   overflow: hidden;
   position: relative;
   
   &:focus {
-    border-color: #007bff;
+    border-color: #409eff;
     background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+    box-shadow: 0 0 0 2px rgba(64, 158, 255, 0.1);
   }
   
   &::placeholder {
-    color: #999999;
+    color: #909399;
   }
 }
 
 .ai-send-btn {
   position: absolute;
-  right: 8px;
+  right: 6px;
   top: 50%;
   transform: translateY(-50%);
-  background: #007bff;
+  background: #409eff;
   color: white;
   border: none;
   border-radius: 50%;
@@ -1972,60 +2192,86 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   
   &:hover {
-    background: #0056b3;
+    background: #66b1ff;
     transform: translateY(-50%) scale(1.05);
   }
   
   &:disabled {
-    background: #e0e0e0;
-    color: #999999;
+    background: #dcdfe6;
+    color: #fff;
     cursor: not-allowed;
     transform: translateY(-50%);
   }
 }
 
 .ai-input-footer {
-  margin-top: 8px;
-  height: 20px;
+  margin-top: 6px;
+  height: 18px;
 }
 
 .ai-typing-indicator {
   display: flex;
+  justify-content: flex-start;
   align-items: center;
-  gap: 4px;
-  color: #666666;
-  font-size: 0.8rem;
   
-  i {
-    animation: typing 1.4s infinite;
-    
-    &:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-    
-    &:nth-child(3) {
-      animation-delay: 0.4s;
-    }
+  svg {
+    width: 100%;
+    max-width: 140px;
+    height: auto;
+    display: block;
+  }
+  
+  /* 1. 旋转加载环 (Spinner) */
+  .spinner {
+    transform-origin: 40px 50px; 
+    animation: spin 1s linear infinite;
+  }
+  
+  /* 2. 加载点 (Dots) 的呼吸动画 */
+  .loading-dot {
+    animation: pulse 1.4s infinite ease-in-out both;
+    fill: #333;
+  }
+  
+  .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+  .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+  .loading-dot:nth-child(3) { animation-delay: 0s; }
+  
+  /* 3. 反光/扫光动画 (Shine) */
+  .shine-layer {
+    animation: shimmer 2.5s infinite;
   }
 }
 
-@keyframes typing {
-  0%, 60%, 100% {
-    transform: translateY(0);
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse {
+  0%, 80%, 100% { 
+    opacity: 0.2; 
+    transform: scale(0.8); 
   }
-  30% {
-    transform: translateY(-8px);
+  40% { 
+    opacity: 1; 
+    transform: scale(1.1); 
   }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 @keyframes fadeInUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(10px);
   }
   to {
     opacity: 1;
@@ -2040,20 +2286,20 @@ onUnmounted(() => {
 
 .sql-confirm-wrapper {
   margin-top: 16px;
-  background: #1e1e1e;
+  background: #282c34;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  border: 1px solid #333;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid #1e222a;
   
   // 终端窗口头部
   .terminal-header {
-    background: #2d2d2d;
+    background: #21252b;
     padding: 8px 12px;
     display: flex;
     align-items: center;
     gap: 12px;
-    border-bottom: 1px solid #3c3c3c;
+    border-bottom: 1px solid #181a1f;
     
     .terminal-dots {
       display: flex;
@@ -2083,22 +2329,22 @@ onUnmounted(() => {
       text-align: center;
       font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
       font-size: 12px;
-      color: #d4d4d4;
+      color: #abb2bf;
       font-weight: 500;
       
       .terminal-success {
-        color: #4ec9b0;
+        color: #98c379;
       }
       
       .terminal-error {
-        color: #f48771;
+        color: #e06c75;
       }
     }
   }
   
   // 终端内容区
   .terminal-body {
-    background: #1e1e1e;
+    background: #282c34;
     padding: 16px;
     font-family: 'SF Mono', 'Monaco', 'Menlo', 'Consolas', 'Courier New', monospace;
     
@@ -2109,13 +2355,13 @@ onUnmounted(() => {
       margin-bottom: 8px;
       
       .terminal-prompt {
-        color: #4ec9b0;
+        color: #98c379;
         font-weight: bold;
         font-size: 14px;
       }
       
       .terminal-command {
-        color: #dcdcaa;
+        color: #e5c07b;
         font-size: 13px;
       }
     }
@@ -2123,10 +2369,10 @@ onUnmounted(() => {
     .terminal-sql {
       margin: 0;
       padding: 12px;
-      background: #252526;
+      background: #21252b;
       border-radius: 4px;
-      border-left: 3px solid #007acc;
-      color: #ce9178;
+      border-left: 3px solid #61afef;
+      color: #abb2bf;
       font-size: 12px;
       line-height: 1.6;
       white-space: pre-wrap;
@@ -2135,20 +2381,20 @@ onUnmounted(() => {
       overflow-y: auto;
       
       &::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       
       &::-webkit-scrollbar-track {
-        background: #1e1e1e;
+        background: #21252b;
       }
       
       &::-webkit-scrollbar-thumb {
-        background: #424242;
-        border-radius: 4px;
+        background: #3e4451;
+        border-radius: 3px;
         
         &:hover {
-          background: #4e4e4e;
+          background: #4b5263;
         }
       }
     }
@@ -2160,8 +2406,8 @@ onUnmounted(() => {
     gap: 10px;
     justify-content: flex-end;
     padding: 12px 16px;
-    background: #252526;
-    border-top: 1px solid #3c3c3c;
+    background: #21252b;
+    border-top: 1px solid #181a1f;
     
     .terminal-btn {
       padding: 6px 16px;
@@ -2180,23 +2426,22 @@ onUnmounted(() => {
       
       &.terminal-btn-cancel {
         background: transparent;
-        color: #f48771;
-        border-color: #f48771;
+        color: #e06c75;
+        border-color: #e06c75;
         
         &:hover:not(:disabled) {
-          background: rgba(244, 135, 113, 0.1);
-          border-color: #ff6b5a;
+          background: rgba(224, 108, 117, 0.1);
         }
       }
       
       &.terminal-btn-allow {
-        background: #0e639c;
-        color: #ffffff;
-        border-color: #0e639c;
+        background: #61afef;
+        color: #282c34;
+        border-color: #61afef;
         
         &:hover:not(:disabled) {
-          background: #1177bb;
-          border-color: #1177bb;
+          background: #528bff;
+          border-color: #528bff;
         }
       }
     }
@@ -2228,7 +2473,8 @@ onUnmounted(() => {
       transform: translateX(-50%) translateY(-50%);
       top: 0;
       width: 24px;
-      height: 3px;
+      height: 4px;
+      border-radius: 2px;
     }
   }
   

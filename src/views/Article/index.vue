@@ -286,7 +286,7 @@ function ReadingModeFunc() {
                 <svg-icon name="author_link"></svg-icon>
                 <strong>本文链接： </strong>
                 <a class="copyright_a"
-                   :href="env.VITE_FRONTEND_URL + $route.path">{{ env.VITE_FRONTEND_URL + $route.path }}</a>
+                   :href="env.VITE_FRONTEND_URL + $route.path">{{ "127.0.0.1:99" + $route.path }}</a>
               </div>
               <div class="license">
                 <div>

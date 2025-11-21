@@ -113,3 +113,47 @@ export function updateThirdEmail(data: any) {
         method: 'post'
     })
 }
+
+// 后台管理API
+// 查询所有用户
+export function userList() {
+    return http({
+        url: '/user/list',
+        method: 'get'
+    })
+}
+
+// 搜索用户
+export function userSearch(data: any) {
+    return http({
+        url: '/user/search',
+        method: 'post',
+        data
+    })
+}
+
+// 修改用户状态
+export function userUpdateStatus(id: string, status: number) {
+    return http({
+        url: '/user/update/status',
+        method: 'post',
+        data: { id, status }
+    })
+}
+
+// 用户详细
+export function userDetail(id: string) {
+    return http({
+        url: `/user/details/${id}`,
+        method: 'get'
+    })
+}
+
+// 删除用户
+export function userDelete(ids: string[]) {
+    return http({
+        url: '/user/delete',
+        method: 'delete',
+        data: { ids }
+    })
+}

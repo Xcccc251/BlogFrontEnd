@@ -2089,12 +2089,45 @@ const stopDrag = () => {
           </button>
         </div>
         <div class="ai-input-footer">
-          <span class="ai-typing-indicator" v-if="isAiTyping">
-            <i class="fas fa-circle"></i>
-            <i class="fas fa-circle"></i>
-            <i class="fas fa-circle"></i>
-            Streaming ...
-          </span>
+          <div class="ai-typing-indicator" v-if="isAiTyping">
+            <svg viewBox="0 0 420 100" xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <!-- 文字形状 Mask -->
+                <clipPath id="streaming-text-mask">
+                  <text x="80" y="65" font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="48">Streaming</text>
+                </clipPath>
+
+                <linearGradient id="streaming-shine-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="white" stop-opacity="0" />
+                  <stop offset="40%" stop-color="white" stop-opacity="0" />
+                  <stop offset="50%" stop-color="white" stop-opacity="0.8" />
+                  <stop offset="60%" stop-color="white" stop-opacity="0" />
+                  <stop offset="100%" stop-color="white" stop-opacity="0" />
+                </linearGradient>
+              </defs>
+
+              <!-- 1. 左侧旋转加载环 -->
+              <circle class="streaming-spinner" cx="40" cy="50" r="14" 
+                      fill="none" stroke="#1a1a1a" stroke-width="4" 
+                      stroke-linecap="round" 
+                      stroke-dasharray="65" stroke-dashoffset="20" />
+
+              <!-- 2. 基础文字层 -->
+              <text x="80" y="65" font-family="Arial, Helvetica, sans-serif" font-weight="bold" font-size="48" fill="#1a1a1a">Streaming</text>
+
+              <!-- 3. 反光层 -->
+              <g clip-path="url(#streaming-text-mask)">
+                <rect class="streaming-shine-layer" x="0" y="0" width="420" height="100" fill="url(#streaming-shine-gradient)" />
+              </g>
+
+              <!-- 4. 右侧跳动点 -->
+              <g transform="translate(330, 65)">
+                <circle class="streaming-loading-dot" cx="0" cy="-5" r="4" />
+                <circle class="streaming-loading-dot" cx="15" cy="-5" r="4" />
+                <circle class="streaming-loading-dot" cx="30" cy="-5" r="4" />
+              </g>
+            </svg>
+          </div>
         </div>
       </div>
       </div>
@@ -3050,59 +3083,20 @@ const stopDrag = () => {
   justify-content: flex-start;
 }
 
-/* Invocating Tools 反光效果 */
+@keyframes text-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
 .invocating-text {
-  position: relative;
-  background: linear-gradient(
-    90deg,
-    #1976d2 0%,
-    #1976d2 35%,
-    #ffffff 50%,
-    #1976d2 65%,
-    #1976d2 100%
-  );
-  background-size: 200% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shine 3.5s linear infinite;
   font-weight: 600;
-  text-shadow: 
-    0 0 10px rgba(255, 255, 255, 0.8),
-    0 0 20px rgba(25, 118, 210, 0.6),
-    0 0 30px rgba(25, 118, 210, 0.4),
-    0 2px 4px rgba(0, 0, 0, 0.3);
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
-}
-
-.invocating-text::before {
-  content: 'Invocating Tools ...';
-  position: absolute;
-  left: 0;
-  top: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    transparent 35%,
-    rgba(255, 255, 255, 0.9) 50%,
-    transparent 65%,
-    transparent 100%
-  );
-  background-size: 200% 100%;
-  background-clip: text;
+  background: linear-gradient(90deg, #1976d2 25%, #90caf9 50%, #1976d2 75%);
+  background-size: 200% auto;
   -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   -webkit-text-fill-color: transparent;
-  animation: shine 3.5s linear infinite;
-  filter: blur(1px);
-}
-
-@keyframes shine {
-  0% {
-    background-position: 200% center;
-  }
-  100% {
-    background-position: -200% center;
-  }
+  animation: text-shimmer 3s linear infinite;
 }
 
 .tool-complete-message .tool-status {
@@ -3266,31 +3260,57 @@ const stopDrag = () => {
 
 .ai-typing-indicator {
   display: flex;
+  justify-content: flex-start;
   align-items: center;
-  gap: 4px;
-  color: #666666;
-  font-size: 0.8rem;
   
-  i {
-    animation: typing 1.4s infinite;
-    
-    &:nth-child(2) {
-      animation-delay: 0.2s;
-    }
-    
-    &:nth-child(3) {
-      animation-delay: 0.4s;
-    }
+  svg {
+    width: 100%;
+    max-width: 140px;
+    height: auto;
+    display: block;
+  }
+  
+  /* 1. 旋转加载环 (Spinner) */
+  .streaming-spinner {
+    transform-origin: 40px 50px; 
+    animation: streaming-spin 1s linear infinite;
+  }
+  
+  /* 2. 加载点 (Dots) 的呼吸动画 */
+  .streaming-loading-dot {
+    animation: streaming-pulse 1.4s infinite ease-in-out both;
+    fill: #333;
+  }
+  
+  .streaming-loading-dot:nth-child(1) { animation-delay: -0.32s; }
+  .streaming-loading-dot:nth-child(2) { animation-delay: -0.16s; }
+  .streaming-loading-dot:nth-child(3) { animation-delay: 0s; }
+  
+  /* 3. 反光/扫光动画 (Shine) */
+  .streaming-shine-layer {
+    animation: streaming-shimmer 2.5s infinite;
   }
 }
 
-@keyframes typing {
-  0%, 60%, 100% {
-    transform: translateY(0);
+@keyframes streaming-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes streaming-pulse {
+  0%, 80%, 100% { 
+    opacity: 0.2; 
+    transform: scale(0.8); 
   }
-  30% {
-    transform: translateY(-8px);
+  40% { 
+    opacity: 1; 
+    transform: scale(1.1); 
   }
+}
+
+@keyframes streaming-shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
 }
 
 @keyframes fadeInUp {

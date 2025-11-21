@@ -192,6 +192,51 @@ export const constantRouter = [
                             title: '知识图谱',
                             requireAuth: true
                         }
+                    },
+                    {
+                        path: 'user',
+                        component: () => import('@/views/Admin/User/index.vue'),
+                        name: 'adminUser',
+                        meta: {
+                            title: '用户管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'role',
+                        component: () => import('@/views/Admin/Role/index.vue'),
+                        name: 'adminRole',
+                        meta: {
+                            title: '角色管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'permission',
+                        component: () => import('@/views/Admin/Permission/index.vue'),
+                        name: 'adminPermission',
+                        meta: {
+                            title: '权限管理',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'role-authorize',
+                        component: () => import('@/views/Admin/Role/AuthorizeUser.vue'),
+                        name: 'adminRoleAuthorize',
+                        meta: {
+                            title: '角色授权',
+                            requireAuth: true
+                        }
+                    },
+                    {
+                        path: 'permission-authorize',
+                        component: () => import('@/views/Admin/Permission/AuthorizeRole.vue'),
+                        name: 'adminPermissionAuthorize',
+                        meta: {
+                            title: '权限授权',
+                            requireAuth: true
+                        }
                     }
                 ]
             }

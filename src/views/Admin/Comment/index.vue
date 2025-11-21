@@ -422,18 +422,22 @@ const formatCreateTime = (createTime?: string | null): string => {
 
 <style scoped lang="scss">
 .comment-manage {
-  padding: 20px;
-  height: 100%;
-  overflow: auto;
+  /* padding is handled by admin-content */
 }
 
 .main-card {
   border-radius: 8px;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03), 0 1px 6px -1px rgba(0, 0, 0, 0.02), 0 2px 4px 0 rgba(0, 0, 0, 0.02);
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.3s;
+  
+  &:hover {
+    box-shadow: 0 4px 16px 0 rgba(0, 0, 0, 0.04);
+  }
 }
 
 .header-section {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .search-form {
@@ -447,20 +451,21 @@ const formatCreateTime = (createTime?: string | null): string => {
 }
 
 :deep(.el-card__body) {
-  padding: 20px;
+  padding: 24px;
 }
 
 :deep(.el-table) {
   font-size: 14px;
   
-  th {
-    background: #fafafa;
-    color: #666;
-    font-weight: 500;
+  th.el-table__cell {
+    background-color: #f5f7fa;
+    color: #606266;
+    font-weight: 600;
+    height: 45px;
   }
   
-  .el-table__body tr:hover > td {
-    background: #fafafa !important;
+  .el-table__body tr:hover > td.el-table__cell {
+    background-color: #f0f9eb !important;
   }
 }
 
@@ -480,7 +485,9 @@ const formatCreateTime = (createTime?: string | null): string => {
 .pagination-container {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f2f5;
 }
 
 // 有子评论的行特殊样式（父评论）
