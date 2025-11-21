@@ -160,30 +160,42 @@ function addChildComment(comment: any) {
 
 <style scoped lang="scss">
 .reply {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: var(--el-fill-color-light);
+  border-radius: 8px;
+  border: 1px solid var(--el-border-color-lighter);
 
   .active {
-    height: 4rem;
-    background: white;
-    border: 1px solid #d09aae;
+    height: 5rem;
+    background: var(--el-fill-color-blank);
+    border: 1px solid var(--el-color-primary);
+    box-shadow: 0 0 0 2px var(--el-color-primary-light-9);
   }
 
   textarea {
     width: 100%;
-    height: 2.2rem;
-    transition: height 0.5s;
-    border: 1px solid #ebebeb;
-    border-radius: 0.5rem;
-    padding: 0.5rem;
+    height: 2.5rem;
+    transition: all 0.3s ease;
+    border: 1px solid var(--el-border-color);
+    border-radius: 8px;
+    padding: 0.8rem;
     resize: none;
     outline: none;
-    font-size: 0.8rem;
-    margin-top: 1rem;
-    background: #f8f8f8;
+    font-size: 0.9rem;
+    background: var(--el-fill-color-blank);
+    color: var(--el-text-color-primary);
+    line-height: 1.5;
+
+    &:focus {
+      border-color: var(--el-color-primary);
+      background: var(--el-fill-color-blank);
+    }
 
     &::-webkit-input-placeholder {
-      font-size: 0.8rem;
-      font-weight: bold;
-      color: #7B5F69;
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--el-text-color-placeholder);
     }
   }
 
@@ -191,7 +203,18 @@ function addChildComment(comment: any) {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 0.5rem;
+    margin-top: 0.8rem;
+
+    .el-button {
+      border-radius: 6px;
+      font-weight: 500;
+      transition: all 0.3s ease;
+
+      &:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      }
+    }
   }
 }
 
@@ -200,77 +223,85 @@ function addChildComment(comment: any) {
   width: 100%;
 
   .OvO_heo {
-
     div {
       display: flex;
       flex-wrap: wrap;
       width: 100%;
       height: 100%;
+      padding: 0.5rem;
       cursor: pointer;
 
       img {
         width: 3em;
         height: 3em;
+        border-radius: 6px;
+        transition: all 0.2s ease;
 
         &:hover {
-          background-color: #F1F1F2FF;
+          background-color: var(--el-fill-color-light);
+          transform: scale(1.1);
         }
       }
-
     }
   }
 
   .OvO_emojis {
     display: flex;
     flex-wrap: wrap;
+    padding: 0.5rem;
 
     div {
       font-size: 1.8rem;
       width: 1.5em;
       height: 1.8em;
-      color: #4A4A4A;
+      color: var(--el-text-color-regular);
       display: flex;
       justify-content: center;
       align-items: center;
       cursor: pointer;
+      border-radius: 6px;
+      transition: all 0.2s ease;
 
       &:hover {
-        background-color: #F1F1F2FF;
+        background-color: var(--el-fill-color-light);
+        transform: scale(1.15);
       }
     }
   }
 
   .OvO_options {
-    // 选项卡固定到底部
     position: sticky;
     bottom: 0;
-    background-color: white;
+    background: var(--el-fill-color-blank);
     display: flex;
     flex-wrap: wrap;
-    border-top: 1px solid #ebebeb;
+    border-top: 1px solid var(--el-border-color-lighter);
     justify-content: flex-start;
     width: 100%;
-
+    padding: 0.3rem;
 
     .item_emoji {
       width: 4em;
       height: 2em;
-      color: #4A4A4A;
+      color: var(--el-text-color-regular);
       display: flex;
       justify-content: center;
       align-items: center;
       margin-right: 0.26rem;
       cursor: pointer;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
 
       &:first-child {
-        background-color: #7B5F69;
+        background-color: var(--el-color-primary);
         color: white;
       }
 
       &:hover {
-        background-color: #F1F1F2FF;
+        background-color: var(--el-fill-color);
       }
-
     }
   }
 }

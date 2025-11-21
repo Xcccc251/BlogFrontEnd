@@ -71,6 +71,16 @@ const handleSqlFill = (sql: string) => {
   ElMessage.success('SQL已填充到编辑器')
 }
 
+// 注册SQL执行回调
+const registerExecuteSqlCallback = inject<((callback: (sql: string) => Promise<void>) => void) | null>('registerExecuteSqlCallback', null)
+
+// SQL执行处理函数
+const handleSqlExecute = async (sql: string) => {
+  sqlQuery.value = sql
+  activeTab.value = 'query'
+  await handleExecuteQuery()
+}
+
 // 初始化
 onMounted(async () => {
   loadQueryHistory()
@@ -80,6 +90,11 @@ onMounted(async () => {
   // 注册SQL填充回调
   if (registerFillSqlCallback) {
     registerFillSqlCallback(handleSqlFill)
+  }
+  
+  // 注册SQL执行回调
+  if (registerExecuteSqlCallback) {
+    registerExecuteSqlCallback(handleSqlExecute)
   }
 })
 

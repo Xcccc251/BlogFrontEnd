@@ -68,8 +68,6 @@ const isShowEmojis = ref(false)
 const isPreview = ref(false)
 // 表情包选项卡
 const emojiOptions = ref(['Emoji', 'Heo'])
-// 是否展示全部子评论
-const showAllChildComments = ref(false)
 // 查询评论数
 const pageSize = ref(10)
 
@@ -205,6 +203,10 @@ function getComments(typeId: number, pageNum: string, pageSize: string) {
       isLoading.value = true
       comments.value = res.data.page
       commentsTotal.value = res.data.total
+      // 为每个评论添加展开状态
+      res.data.page.forEach((comment: any) => {
+        comment.showAllReplies = false
+      })
       handleComments(res.data.page)
       isLikeFunc()
     }
@@ -334,11 +336,11 @@ function addParentComment() {
       </div>
     </div>
     <!-- 评论内容 -->
-    <div>
-      <div style="display: flex;margin-top: 1rem;border-top: 1px solid var(--el-border-color);
-  padding-top: 1rem;" v-for="comment in comments">
-        <el-avatar shape="square" :size="40"
-                   :src="comment.commentUserAvatar"/>
+    <div class="comments-list">
+      <div class="comment-item" v-for="comment in comments">
+        <el-avatar shape="square" :size="45"
+                   :src="comment.commentUserAvatar"
+                   class="comment-avatar"/>
         <div class="comment_content">
           <div class="comment_content_header">
             <div>
@@ -360,7 +362,7 @@ function addParentComment() {
           </div>
           <!-- 父评论 -->
           <div class="comment_content_body">
-            <div>
+            <div class="parent-comment-content">
               <MdPreview :modelValue="comment.commentContent"/>
             </div>
           </div>
@@ -378,17 +380,17 @@ function addParentComment() {
           <template v-if="comment.childComment && comment.childComment.length">
             <ChildComment :reply-btn="replyBtn" :like-btn="likeBtn" :cancel-like-btn="cancelLikeBtn" :comment="comment"
                           :author-id="authorId"
-                          :show-all-child-comments="showAllChildComments"
+                          :show-all-child-comments="comment.showAllReplies"
                           :get-comments="getComments" :page-size="pageSize"
                           :type="type"
             />
           </template>
           <!-- 查看更多 -->
-          <div style="display: flex;justify-content: center;margin-top: 1rem" v-if="comment.childCommentCount >= 2">
-            <el-button type="info" plain size="small" @click="showAllChildComments = true" v-if="!showAllChildComments">
-              查看全部{{ comment.childCommentCount }}条回复
+          <div class="view-more-replies" v-if="comment.childComment && comment.childComment.length >= 2">
+            <el-button type="primary" plain size="small" @click="comment.showAllReplies = true" v-if="!comment.showAllReplies">
+              查看全部{{ comment.childComment.length }}条回复
             </el-button>
-            <el-button type="info" plain size="small" @click="showAllChildComments = false" v-if="showAllChildComments">
+            <el-button type="info" plain size="small" @click="comment.showAllReplies = false" v-if="comment.showAllReplies">
               收起回复
             </el-button>
           </div>
@@ -405,13 +407,40 @@ function addParentComment() {
 <style scoped lang="scss">
 @import "./index";
 
-.more {
+.view-more-replies {
   display: flex;
   justify-content: center;
   margin-top: 1rem;
 
   .el-button {
+    border-radius: 6px;
+    font-weight: 500;
+    padding: 0.5rem 1.5rem;
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+  }
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+  margin: 1.5rem 0;
+
+  .el-button {
     width: 100%;
+    padding: 1rem;
+    border-radius: 8px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
   }
 }
 </style>

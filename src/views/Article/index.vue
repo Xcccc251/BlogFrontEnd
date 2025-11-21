@@ -351,10 +351,6 @@ function ReadingModeFunc() {
                   </div>
                 </div>
               </template>
-              <div>
-                <svg-icon name="gift"/>
-                <span class="max-[540px]:hidden">ヾ(≧▽≦*)o！</span>
-              </div>
             </el-tooltip>
           </div>
           <!-- 上/下 篇文章-->

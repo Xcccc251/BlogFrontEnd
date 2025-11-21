@@ -5,6 +5,7 @@ import { Document, Collection, Connection, Loading, ArrowRight, Check, Close, Fo
 import { ElMessage } from 'element-plus'
 import useUserStore from '@/store/modules/user'
 import { backendAgentAPI } from '@/apis/aiChat'
+import doneSound from '@/assets/sounds/done1.mp3'
 
 const router = useRouter()
 const route = useRoute()
@@ -21,13 +22,21 @@ const registerFillSqlCallback = (callback: (sql: string) => void) => {
 // 提供给子组件使用
 provide('registerFillSqlCallback', registerFillSqlCallback)
 
+// SQL执行功能 - 用于与Database页面通信
+const executeSqlCallback = ref<((sql: string) => Promise<void>) | null>(null)
+const registerExecuteSqlCallback = (callback: (sql: string) => Promise<void>) => {
+  executeSqlCallback.value = callback
+}
+// 提供给子组件使用
+provide('registerExecuteSqlCallback', registerExecuteSqlCallback)
+
 // 检查用户是否登录
 const isLoggedIn = computed(() => {
   return userStore.userInfo !== undefined && userStore.userInfo !== null
 })
 
 // 菜单分组展开状态
-const groupExpandState = ref({
+const groupExpandState = ref<Record<string, boolean>>({
   website: true,
   system: true,
   data: true
@@ -119,6 +128,8 @@ const menuGroups = [
     ]
   }
 ]
+
+const menuItems = menuGroups.flatMap(group => group.items)
 
 // 菜单点击
 const handleMenuClick = (item: any) => {
@@ -214,6 +225,22 @@ const sendAiMessage = async (message: string) => {
     })
   } finally {
     isAiTyping.value = false
+    // 播放完成音效
+    try {
+      const audio = new Audio(doneSound)
+      audio.currentTime = 0 // 确保从头开始播放
+      audio.volume = 0.7 // 设置音量为70%
+      // 等待音频可以播放后再开始
+      audio.addEventListener('canplaythrough', () => {
+        audio.play().catch(err => {
+          console.warn('播放音效失败:', err)
+        })
+      }, { once: true })
+      // 立即加载音频
+      audio.load()
+    } catch (err) {
+      console.warn('创建音效对象失败:', err)
+    }
   }
 }
 
@@ -560,7 +587,22 @@ const handleSqlConfirm = async (messageIndex: number, confirmed: boolean) => {
     if (response.data.success) {
       // 更新确认状态
       confirmRequest.confirmed = confirmed
-      ElMessage.success(confirmed ? '✓ 已允许执行 SQL' : '✗ 已拒绝执行 SQL')
+      
+      if (confirmed) {
+        ElMessage.success('✓ 已允许执行 SQL')
+        // 如果确认执行，且在数据库页面，自动执行SQL
+        if (activeMenu.value === 'database' && executeSqlCallback.value) {
+          try {
+            await executeSqlCallback.value(confirmRequest.sql)
+            ElMessage.success('SQL 已自动执行')
+          } catch (error: any) {
+            console.error('自动执行SQL失败:', error)
+            ElMessage.error('自动执行SQL失败: ' + (error.message || error))
+          }
+        }
+      } else {
+        ElMessage.success('✗ 已拒绝执行 SQL')
+      }
     } else {
       ElMessage.error(response.data.error || '确认失败')
       confirmRequest.confirming = false

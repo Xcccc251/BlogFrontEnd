@@ -2180,7 +2180,7 @@ const stopDrag = () => {
   display: flex;
   flex: 1;
   min-width: 0;
-  padding: 10px 10px 10px 10px; /* 给主面板区域添加内边距 */
+  padding: 10px 10px 40px 10px; /* 给主面板区域添加内边距 */
 }
 
 /* 侧边栏样式（复用 AiChat 风格，颜色统一） */
