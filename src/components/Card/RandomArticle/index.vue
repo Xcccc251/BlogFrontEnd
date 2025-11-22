@@ -1,16 +1,16 @@
 <script setup lang="ts">
 
-import {getRandomArticle, getRelatedArticle} from "@/apis/home";
+import {getHomeRecommendArticle, getSimilarArticle} from "@/apis/home";
 import {onMounted} from "vue";
 
 const props = defineProps({
   title: {
     type: String,
-    default: '随机文章',
+    default: '为你推荐',
   },
   prefixIcon: {
     type: String,
-    default: 'random_essay',
+    default: 'recommend',
   },
   // 分类id
   categoryId: {
@@ -31,8 +31,8 @@ const randomArticles = ref([{
   createTime: '',
 }])
 
-function randomArticleBtn() {
-  getRandomArticle().then(res => {
+function recommendArticleBtn() {
+  getHomeRecommendArticle(5).then(res => {
     res.data = formatDate(res.data)
     randomArticles.value = res.data
   })
@@ -40,12 +40,12 @@ function randomArticleBtn() {
 
 // 监听参数变化
 watch(() => props.articleId, () => {
-  relatedRecommendBtn(props.categoryId, props.articleId)
+  relatedRecommendBtn(props.articleId)
 })
 
 // 相关推荐
-function relatedRecommendBtn(categoryId: string, articleId: string) {
-  getRelatedArticle(categoryId, articleId).then(res => {
+function relatedRecommendBtn(articleId: string) {
+  getSimilarArticle(articleId, 5).then(res => {
     res.data = formatDate(res.data)
     randomArticles.value = res.data
   })
@@ -60,25 +60,25 @@ function formatDate(date: []) {
 }
 
 function loadContent(){
-  if (props.title == "随机文章") {
-    randomArticleBtn()
+  if (props.title == "为你推荐") {
+    recommendArticleBtn()
   }
   if (props.title == "相关推荐") {
-    relatedRecommendBtn(props.categoryId, props.articleId)
+    relatedRecommendBtn(props.articleId)
   }
 }
 
 </script>
 
 <template>
-  <!-- 随机文章 -->
+  <!-- 推荐文章 -->
   <Card :title="title" :prefix-icon="prefixIcon" :suffix-icon="title === '相关推荐' ? '' : 'rotate'" @isRotate="true"
-        :isScale="true" @invoke="randomArticleBtn" v-view-request="{ callback: loadContent }">
-      <div class="random_container" v-for="randomArticle in randomArticles">
-        <div class="random_image" @click="$router.push('/article/'+randomArticle.id)">
+        :isScale="true" @invoke="recommendArticleBtn" v-view-request="{ callback: loadContent }">
+      <div class="random_container" v-for="randomArticle in randomArticles" :key="randomArticle.id" @click="$router.push('/article/'+randomArticle.id)">
+        <div class="random_image">
           <img :data-src="randomArticle.articleCover" v-lazy="true" />
         </div>
-        <div class="random_text" :key="randomArticle.id">
+        <div class="random_text">
           <div>{{ randomArticle.articleTitle }}</div>
           <div>{{ randomArticle.createTime }}</div>
         </div>
@@ -91,12 +91,19 @@ function loadContent(){
   display: flex;
   align-items: center;
   margin: 10px 0;
+  cursor: pointer;
+  border-radius: 0.5rem;
+  transition: all 0.3s ease;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+    transform: translateX(8px);
+  }
 
   .random_image {
     width: 45%;
     height: 70px;
     overflow: hidden;
-    cursor: pointer;
     border-radius: 0.5rem;
 
     img {

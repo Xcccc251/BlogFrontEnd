@@ -13,13 +13,6 @@ const modules = ref([Navigation,Pagination,Autoplay]);
 
 function loadContent(){
   getRecommendArticleList().then(res => {
-    // 过滤内容
-    res.data = res.data.map((item: any) => {
-      item.articleContent = item.articleContent.replace(/[*#>`~\-\\[\]()\s]|(\n\n)/g, '')
-      // 提取前 50 个字符
-      item.articleContent = item.articleContent.substring(0, 25) + '...';
-      return item;
-    });
     recommendArticles.value = res.data
   })
 }
@@ -52,9 +45,6 @@ function loadContent(){
           </div>
           <div style="font-size: 15px">
             {{ recommendArticle.createTime }}
-          </div>
-          <div style="font-size: 18px">
-            {{ recommendArticle.articleContent }}
           </div>
         </div>
         <el-image :src="recommendArticle.articleCover"/>

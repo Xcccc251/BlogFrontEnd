@@ -399,7 +399,7 @@ const resultStats = computed(() => {
                       @click="useHistoryQuery(query)"
                     >
                       <div class="history-index">{{ index + 1 }}</div>
-                      <div class="history-query">{{ query }}</div>
+                      <div class="history-query" :title="query">{{ query }}</div>
                     </div>
                   </div>
                   <div v-if="queryHistory.length === 0" class="empty-history">
@@ -772,8 +772,10 @@ const resultStats = computed(() => {
           font-size: 13px;
           font-family: 'Consolas', 'Monaco', monospace;
           color: #333;
-          word-break: break-all;
           line-height: 1.5;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
       }
     }

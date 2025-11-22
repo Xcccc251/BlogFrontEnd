@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, RefreshRight, Search, Plus, Edit, ZoomIn } from '@element-plus/icons-vue'
 import {
@@ -57,9 +57,29 @@ const dialogFormData = reactive({
 const hasSelected = computed(() => selectedRows.value.length > 0)
 const hasOneSelected = computed(() => selectedRows.value.length === 1)
 
+// 注入回调注册函数
+const registerUpdateQueryResultCallback = inject<((callback: (data: any) => void) => void) | null>('registerUpdateQueryResultCallback', null)
+
+// 处理来自 SQL 查询的数据更新
+const handleQueryResultUpdate = (rows: any[]) => {
+  // 保存所有数据
+  allTableData.value = rows
+  // 更新分页
+  pagination.total = rows.length
+  pagination.currentPage = 1
+  updateTableData()
+  
+  console.log('Permission 页面已接收并更新数据，共', rows.length, '条')
+}
+
 onMounted(async () => {
   await refreshData()
   await loadMenuList()
+  
+  // 注册数据更新回调
+  if (registerUpdateQueryResultCallback) {
+    registerUpdateQueryResultCallback(handleQueryResultUpdate)
+  }
 })
 
 const loadMenuList = async () => {

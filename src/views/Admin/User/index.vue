@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, RefreshRight, Search, View } from '@element-plus/icons-vue'
 import {
@@ -52,8 +52,26 @@ const registerTypeMap: Record<number, string> = {
 // 计算是否有选中行
 const hasSelected = computed(() => selectedRows.value.length > 0)
 
+// 注入回调注册函数
+const registerUpdateQueryResultCallback = inject<((callback: (data: any) => void) => void) | null>('registerUpdateQueryResultCallback', null)
+
+// 处理来自 SQL 查询的数据更新
+const handleQueryResultUpdate = (rows: any[]) => {
+  // 直接更新表格数据
+  tableData.value = rows
+  pagination.total = rows.length
+  pagination.currentPage = 1
+  
+  console.log('User 页面已接收并更新数据，共', rows.length, '条')
+}
+
 onMounted(async () => {
   await refreshData()
+  
+  // 注册数据更新回调
+  if (registerUpdateQueryResultCallback) {
+    registerUpdateQueryResultCallback(handleQueryResultUpdate)
+  }
 })
 
 const refreshData = async () => {
@@ -147,7 +165,6 @@ const handleViewDetail = async (row: UserItem) => {
       ElMessageBox.alert(
         `<div style="text-align: left;">
           <p><strong>用户名：</strong>${res.data.username}</p>
-          <p><strong>昵称：</strong>${res.data.nickname || '-'}</p>
           <p><strong>邮箱：</strong>${res.data.email}</p>
           <p><strong>注册方式：</strong>${registerTypeMap[res.data.registerType]}</p>
           <p><strong>登录地址：</strong>${res.data.loginAddress || '-'}</p>

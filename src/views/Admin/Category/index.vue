@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
@@ -47,9 +47,27 @@ const categoryForm = reactive({
   categoryName: ''
 })
 
+// 注入回调注册函数
+const registerUpdateQueryResultCallback = inject<((callback: (data: any) => void) => void) | null>('registerUpdateQueryResultCallback', null)
+
+// 处理来自 SQL 查询的数据更新
+const handleQueryResultUpdate = (rows: any[]) => {
+  // 直接更新表格数据
+  tableData.value = rows
+  pagination.total = rows.length
+  pagination.currentPage = 1
+  
+  console.log('Category 页面已接收并更新数据，共', rows.length, '条')
+}
+
 // 初始化
 onMounted(() => {
   loadData()
+  
+  // 注册数据更新回调
+  if (registerUpdateQueryResultCallback) {
+    registerUpdateQueryResultCallback(handleQueryResultUpdate)
+  }
 })
 
 // 加载数据

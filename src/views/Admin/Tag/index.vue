@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, RefreshRight, Search } from '@element-plus/icons-vue'
 import {
@@ -50,9 +50,30 @@ const tagRules = {
   ]
 }
 
+// 注入回调注册函数
+const registerUpdateQueryResultCallback = inject<((callback: (data: any) => void) => void) | null>('registerUpdateQueryResultCallback', null)
+
+// 处理来自 SQL 查询的数据更新
+const handleQueryResultUpdate = (rows: any[]) => {
+  // 保存所有数据
+  allTagData.value = rows
+  // 重置到第一页
+  pagination.currentPage = 1
+  pagination.total = rows.length
+  // 前端分页
+  updateTableData()
+  
+  console.log('Tag 页面已接收并更新数据，共', rows.length, '条')
+}
+
 // 初始化
 onMounted(() => {
   refreshData()
+  
+  // 注册数据更新回调
+  if (registerUpdateQueryResultCallback) {
+    registerUpdateQueryResultCallback(handleQueryResultUpdate)
+  }
 })
 
 // 刷新数据

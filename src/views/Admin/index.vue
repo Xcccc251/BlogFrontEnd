@@ -5,6 +5,7 @@ import { Document, Collection, Connection, Loading, ArrowRight, Check, Close, Fo
 import { ElMessage } from 'element-plus'
 import useUserStore from '@/store/modules/user'
 import { backendAgentAPI } from '@/apis/aiChat'
+import { executeQuery } from '@/apis/database'
 import doneSound from '@/assets/sounds/done1.mp3'
 
 const router = useRouter()
@@ -29,6 +30,14 @@ const registerExecuteSqlCallback = (callback: (sql: string) => Promise<void>) =>
 }
 // 提供给子组件使用
 provide('registerExecuteSqlCallback', registerExecuteSqlCallback)
+
+// Query结果更新功能 - 用于自动更新页面数据
+const updateQueryResultCallback = ref<((data: any) => void) | null>(null)
+const registerUpdateQueryResultCallback = (callback: (data: any) => void) => {
+  updateQueryResultCallback.value = callback
+}
+// 提供给子组件使用
+provide('registerUpdateQueryResultCallback', registerUpdateQueryResultCallback)
 
 // 检查用户是否登录
 const isLoggedIn = computed(() => {
@@ -590,15 +599,78 @@ const handleSqlConfirm = async (messageIndex: number, confirmed: boolean) => {
       
       if (confirmed) {
         ElMessage.success('✓ 已允许执行 SQL')
-        // 如果确认执行，且在数据库页面，自动执行SQL
-        if (activeMenu.value === 'database' && executeSqlCallback.value) {
-          try {
-            await executeSqlCallback.value(confirmRequest.sql)
-            ElMessage.success('SQL 已自动执行')
-          } catch (error: any) {
-            console.error('自动执行SQL失败:', error)
-            ElMessage.error('自动执行SQL失败: ' + (error.message || error))
+        // 直接调用 API 执行 SQL（不限制页面）
+        try {
+          const result = await executeQuery(confirmRequest.sql)
+          if (result.code === 200) {
+            ElMessage.success('SQL 已执行成功')
+            console.log('SQL 执行结果:', result.data)
+            
+            // 检查返回数据格式，自动更新对应页面
+            if (result.data && result.data.columns && result.data.rows) {
+              const columns = result.data.columns
+              
+              // 检查是否包含 Tag 页面所需字段
+              const hasTagFields = ['id', 'tagName', 'articleCount', 'createTime', 'updateTime']
+                .every(field => columns.includes(field))
+              
+              // 检查是否包含 Category 页面所需字段
+              const hasCategoryFields = ['id', 'categoryName', 'articleCount', 'createTime', 'updateTime']
+                .every(field => columns.includes(field))
+              
+              // 检查是否包含 Comment 页面所需字段
+              const hasCommentFields = ['id', 'parentId', 'type', 'typeId', 'commentContent', 'commentUserName', 'isCheck', 'createTime']
+                .every(field => columns.includes(field))
+              
+              // 检查是否包含 User 页面所需字段
+              const hasUserFields = ['id', 'username', 'email', 'avatar', 'nickname', 'isDisable', 'registerType', 'loginAddress', 'createTime']
+                .every(field => columns.includes(field))
+              
+              // 检查是否包含 Role 页面所需字段
+              const hasRoleFields = ['id', 'roleName', 'roleKey', 'orderNum', 'status', 'createTime']
+                .every(field => columns.includes(field))
+              
+              // 检查是否包含 Permission 页面所需字段
+              const hasPermissionFields = ['id', 'permissionKey', 'permissionDesc', 'menuName', 'menuId']
+                .every(field => columns.includes(field))
+              
+              if (hasTagFields && activeMenu.value === 'tag' && updateQueryResultCallback.value) {
+                // 自动更新 Tag 页面数据
+                updateQueryResultCallback.value(result.data.rows)
+                ElMessage.success('标签列表已自动更新')
+              } else if (hasCategoryFields && activeMenu.value === 'category' && updateQueryResultCallback.value) {
+                // 自动更新 Category 页面数据
+                updateQueryResultCallback.value(result.data.rows)
+                ElMessage.success('分类列表已自动更新')
+              } else if (hasCommentFields && activeMenu.value === 'comment' && updateQueryResultCallback.value) {
+                // 自动更新 Comment 页面数据
+                updateQueryResultCallback.value(result.data.rows)
+                ElMessage.success('评论列表已自动更新')
+              } else if (hasUserFields && activeMenu.value === 'user' && updateQueryResultCallback.value) {
+                // 自动更新 User 页面数据
+                updateQueryResultCallback.value(result.data.rows)
+                ElMessage.success('用户列表已自动更新')
+              } else if (hasRoleFields && activeMenu.value === 'role' && updateQueryResultCallback.value) {
+                // 自动更新 Role 页面数据
+                updateQueryResultCallback.value(result.data.rows)
+                ElMessage.success('角色列表已自动更新')
+              } else if (hasPermissionFields && activeMenu.value === 'permission' && updateQueryResultCallback.value) {
+                // 自动更新 Permission 页面数据
+                updateQueryResultCallback.value(result.data.rows)
+                ElMessage.success('权限列表已自动更新')
+              }
+            }
+          } else {
+            ElMessage.error('SQL 执行失败: ' + (result.message || '未知错误'))
           }
+        } catch (error: any) {
+          console.error('执行SQL失败:', error)
+          ElMessage.error('执行SQL失败: ' + (error.message || error))
+        }
+        
+        // 如果在数据库页面，同时填充到编辑器
+        if (activeMenu.value === 'database' && fillSqlCallback.value) {
+          fillSqlCallback.value(confirmRequest.sql)
         }
       } else {
         ElMessage.success('✗ 已拒绝执行 SQL')
@@ -2418,7 +2490,8 @@ onUnmounted(() => {
       font-size: 12px;
       line-height: 1.6;
       white-space: pre-wrap;
-      word-break: break-all;
+      word-break: break-word;
+      text-align: left;
       max-height: 200px;
       overflow-y: auto;
       

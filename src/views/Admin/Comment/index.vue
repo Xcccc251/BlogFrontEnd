@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, inject } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Search, Refresh, Link } from '@element-plus/icons-vue'
 import {
@@ -44,9 +44,31 @@ const pagination = reactive({
   pageSizes: [10, 20, 30, 50, 100]
 })
 
+// 注入回调注册函数
+const registerUpdateQueryResultCallback = inject<((callback: (data: any) => void) => void) | null>('registerUpdateQueryResultCallback', null)
+
+// 处理来自 SQL 查询的数据更新
+const handleQueryResultUpdate = (rows: any[]) => {
+  // 保存所有平铺数据
+  allData.value = rows
+  // 重新构建树形结构
+  allTreeData.value = buildTree(rows)
+  // 更新分页和表格
+  pagination.total = allTreeData.value.length
+  pagination.currentPage = 1
+  applyPagination()
+  
+  console.log('Comment 页面已接收并更新数据，共', rows.length, '条（包含子评论）')
+}
+
 // 初始化
 onMounted(() => {
   loadData()
+  
+  // 注册数据更新回调
+  if (registerUpdateQueryResultCallback) {
+    registerUpdateQueryResultCallback(handleQueryResultUpdate)
+  }
 })
 
 // 构建树形数据
