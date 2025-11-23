@@ -7,6 +7,7 @@ export {}
 
 declare module 'vue' {
   export interface GlobalComponents {
+    AiChatFlowchart: typeof import('./../components/Flowchart/AiChatFlowchart.vue')['default']
     AudioControls: typeof import('./../components/Music/controls/components/audio-controls.vue')['default']
     Banner: typeof import('./../components/Banner/index.vue')['default']
     BottomRightLayout: typeof import('./../components/BottomRightLayout/index.vue')['default']
