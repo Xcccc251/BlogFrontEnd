@@ -1,17 +1,17 @@
 <!-- 侧边栏 -->
 <template>
   <div>
-    <div>
+    <!-- <div>
       <InfoCard/>
-    </div>
-    <div>
+    </div> -->
+    <!-- <div>
       <Card title="公告" prefixIcon="announcement" suffix-icon="jt_y" :isDithering="true" :isArrow="true"
             @invoke="announcement">
         <pre class="pre-text">
 {{ useWebsite.webInfo?.sidebarAnnouncement }}
         </pre>
       </Card>
-    </div>
+    </div> -->
     <div>
       <ElectronicClocks/>
     </div>
@@ -19,13 +19,13 @@
       <RandomArticle/>
     </div>
     <ChargingList/>
-    <div>
+    <!-- <div>
       <Card title="每日鸡汤" prefix-icon="edit" suffix-icon="rotate" :isRotate="true" :isScale="true" @invoke="soupSub">
         <p>{{ soup }}</p>
       </Card>
-    </div>
+    </div> -->
     <div>
-      <Card title="网站资讯" prefix-icon="statistics" :isScale="true">
+      <Card title="数据统计" prefix-icon="statistics" :isScale="true">
         <div class="statistics">
           <div>文章数目：<span>{{ useWebsite.webInfo?.articleCount }}</span></div>
           <div>运行时长：<span>{{ differenceInDays }} 天</span></div>

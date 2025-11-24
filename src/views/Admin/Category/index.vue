@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, onMounted, inject } from 'vue'
+import { ref, reactive, onMounted, inject, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Edit, Plus, Refresh, Search } from '@element-plus/icons-vue'
 import {
@@ -49,6 +49,13 @@ const categoryForm = reactive({
 
 // 注入回调注册函数
 const registerUpdateQueryResultCallback = inject<((callback: (data: any) => void) => void) | null>('registerUpdateQueryResultCallback', null)
+
+// 计算属性：当前页的数据
+const paginatedData = computed(() => {
+  const start = (pagination.currentPage - 1) * pagination.pageSize
+  const end = start + pagination.pageSize
+  return tableData.value.slice(start, end)
+})
 
 // 处理来自 SQL 查询的数据更新
 const handleQueryResultUpdate = (rows: any[]) => {
@@ -309,7 +316,7 @@ const handleSizeChange = (size: number) => {
       <div class="table-section">
       <el-table
       v-loading="loading"
-      :data="tableData"
+      :data="paginatedData"
       style="width: 100%"
       @selection-change="handleSelectionChange"
     >

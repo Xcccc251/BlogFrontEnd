@@ -40,7 +40,6 @@ const formData = reactive({
 const tableData = ref<ArticleItem[]>([])
 const loading = ref(false)
 const selectedRows = ref<ArticleItem[]>([])
-const allArticleData = ref<ArticleItem[]>([]) // 保存所有文章数据用于前端分页
 
 // 分页数据
 const pagination = reactive({
@@ -75,18 +74,13 @@ const loadCategories = async () => {
 const refreshData = async () => {
   loading.value = true
   try {
-    const res: any = await articleList()
+    const res: any = await articleList(pagination.currentPage, pagination.pageSize)
     if (res.code === 200) {
-      const allData = res.data.map((item: any) => ({
+      tableData.value = res.data.page.map((item: any) => ({
         ...item,
         isTop: item.isTop === 1
       }))
-      // 保存所有数据
-      allArticleData.value = allData
-      // 设置总数
-      pagination.total = allData.length
-      // 前端分页：根据当前页和每页大小截取数据
-      updateTableData()
+      pagination.total = res.data.total
     }
   } catch (error) {
     ElMessage.error('加载文章列表失败')
@@ -95,32 +89,20 @@ const refreshData = async () => {
   }
 }
 
-// 更新表格数据（用于分页）
-const updateTableData = () => {
-  const start = (pagination.currentPage - 1) * pagination.pageSize
-  const end = start + pagination.pageSize
-  tableData.value = allArticleData.value.slice(start, end)
-}
-
 // 搜索
 const handleSearch = async () => {
   loading.value = true
   try {
-    const res: any = await articleSearch(formData)
+    pagination.currentPage = 1
+    const res: any = await articleSearch(formData, pagination.currentPage, pagination.pageSize)
     if (res.code === 200) {
-      const allData = res.data.map((item: any) => ({
+      tableData.value = res.data.page.map((item: any) => ({
         ...item,
         isTop: item.isTop === 1
       }))
-      // 保存所有数据
-      allArticleData.value = allData
-      // 重置到第一页
-      pagination.currentPage = 1
-      pagination.total = allData.length
-      // 前端分页
-      updateTableData()
+      pagination.total = res.data.total
       
-      if (res.data.length === 0) {
+      if (res.data.page.length === 0) {
         ElMessage.warning('没有查询到相关文章')
       }
     }
@@ -147,14 +129,14 @@ const handleReset = () => {
 // 分页：页码改变
 const handleCurrentChange = (page: number) => {
   pagination.currentPage = page
-  updateTableData()
+  refreshData()
 }
 
 // 分页：每页大小改变
 const handleSizeChange = (size: number) => {
   pagination.pageSize = size
   pagination.currentPage = 1
-  updateTableData()
+  refreshData()
 }
 
 // 修改文章状态

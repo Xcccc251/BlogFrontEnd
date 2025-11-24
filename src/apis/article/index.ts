@@ -158,19 +158,27 @@ export async function uploadArticleImage(data: any) {
 }
 
 // 文章列表
-export async function articleList() {
+export async function articleList(pageNum: number, pageSize: number) {
     return http.request({
         url: '/article/back/list',
-        method: 'get'
+        method: 'get',
+        params: {
+            pageNum,
+            pageSize
+        }
     });
 }
 
 // 文章搜索
-export async function articleSearch(data: any) {
+export async function articleSearch(data: any, pageNum: number, pageSize: number) {
     return http.request({
         url: '/article/back/search',
         method: 'post',
-        data
+        data,
+        params: {
+            pageNum,
+            pageSize
+        }
     });
 }
 

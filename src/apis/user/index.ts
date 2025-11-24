@@ -116,19 +116,27 @@ export function updateThirdEmail(data: any) {
 
 // 后台管理API
 // 查询所有用户
-export function userList() {
+export function userList(pageNum: number, pageSize: number) {
     return http({
         url: '/user/list',
-        method: 'get'
+        method: 'get',
+        params: {
+            pageNum,
+            pageSize
+        }
     })
 }
 
 // 搜索用户
-export function userSearch(data: any) {
+export function userSearch(data: any, pageNum: number, pageSize: number) {
     return http({
         url: '/user/search',
         method: 'post',
-        data
+        data,
+        params: {
+            pageNum,
+            pageSize
+        }
     })
 }
 

@@ -966,18 +966,15 @@ onUnmounted(() => {
       <div ref="aiChatMessages" class="ai-chat-messages">
         <div v-if="aiMessages.length === 0" class="welcome-message">
           <div class="feature-tip">
-            <p><strong>👋 AI 智能管理助手</strong></p>
-            <p>我可以协助您管理整个后台系统：</p>
-            <ul style="text-align: left; margin: 10px 0; padding-left: 30px;">
+            <p><strong>👋 AI 管理助手</strong></p>
+            <p>使用AI协助管理后台系统：</p>
+            <ul style="text-align: center; margin: 10px 0; list-style-position: inside;">
               <li>📝 文章与内容管理</li>
               <li>🗄️ 数据库查询与维护</li>
               <li>📊 数据统计与分析</li>
               <li>🔧 自动化管理任务</li>
               <li>💡 解答系统使用问题</li>
             </ul>
-            <p style="color: #999; font-size: 0.85rem; margin-top: 10px;">
-              💡 提示：无论在哪个页面，我都可以为您提供相关的协助
-            </p>
           </div>
         </div>
         

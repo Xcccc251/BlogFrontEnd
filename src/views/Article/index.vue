@@ -39,7 +39,8 @@ const articleDetail = ref({
   createTime: '',
   updateTime: '',
   userId: 0,
-  id: "0"
+  id: "0",
+  nickname: ''
 })
 
 const route = useRoute();
@@ -168,7 +169,7 @@ function likeBtn(detail: object) {
       if (res.code === 200) {
         detail.likeCount -= 1
         like.value = false
-        ElMessage.info("我会继续努力的");
+        ElMessage.info("取消点赞");
       } else {
         ElMessage.error(res.msg);
       }
@@ -178,7 +179,7 @@ function likeBtn(detail: object) {
       if (res.code === 200) {
         detail.likeCount += 1
         like.value = true
-        ElMessage.success("感谢你的认可");
+        ElMessage.success("点赞成功");
       } else {
         ElMessage.error(res.msg);
       }
@@ -280,7 +281,7 @@ function ReadingModeFunc() {
             <div class="copyright">
               <div class="author">
                 <svg-icon name="article_author"></svg-icon>
-                <strong>本文作者： {{ websiteStore.webInfo?.webmasterName }}</strong>
+                <strong>本文作者： {{ articleDetail.nickname }}</strong>
               </div>
               <div class="link">
                 <svg-icon name="author_link"></svg-icon>
@@ -306,11 +307,14 @@ function ReadingModeFunc() {
             </div>
           </div>
           <!-- 尾部标签与点赞收藏分享 -->
-          <div style="display: flex;justify-content: space-between">
-            <div class="tag">
-              <template v-for="tag in articleDetail.tags" :key="tag.id">
-                <div @click="$router.push(`/tags/${tag.id}`)"># {{ tag.tagName }}</div>
-              </template>
+          <div style="display: flex;justify-content: space-between;align-items: center;">
+            <div style="display: flex;align-items: center;flex-wrap: wrap;">
+              <span style="font-weight: bold;margin-right: 0.5rem;">标签：</span>
+              <div class="tag">
+                <template v-for="tag in articleDetail.tags" :key="tag.id">
+                  <div @click="$router.push(`/tags/${tag.id}`)"># {{ tag.tagName }}</div>
+                </template>
+              </div>
             </div>
             <div class="like">
               <div @click="likeBtn(articleDetail)">
@@ -329,7 +333,8 @@ function ReadingModeFunc() {
               </div>
             </div>
           </div>
-          <div>
+          <div style="display: flex;align-items: center;margin-top: 0.5rem;">
+            <span style="font-weight: bold;margin-right: 0.5rem;">分类：</span>
             <div class="tag" style="display: flex;justify-content: left;">
               <div @click="$router.push(`/category/${articleDetail.categoryId}`)">{{ articleDetail.categoryName }}</div>
             </div>
@@ -447,7 +452,7 @@ function ReadingModeFunc() {
         <div class="copyright">
           <div class="author">
             <svg-icon name="article_author"></svg-icon>
-            <strong>本文作者： {{ websiteStore.webInfo?.webmasterName }}</strong>
+            <strong>本文作者： {{ articleDetail.nickname }}</strong>
           </div>
           <div class="link">
             <svg-icon name="author_link"></svg-icon>
@@ -473,11 +478,14 @@ function ReadingModeFunc() {
         </div>
       </div>
       <!-- 尾部标签与点赞收藏分享 -->
-      <div style="display: flex;justify-content: space-between">
-        <div class="tag">
-          <template v-for="tag in articleDetail.tags" :key="tag.id">
-            <div @click="$router.push(`/tags/${tag.id}`)"># {{ tag.tagName }}</div>
-          </template>
+      <div style="display: flex;justify-content: space-between;align-items: center;">
+        <div style="display: flex;align-items: center;flex-wrap: wrap;">
+          <span style="font-weight: bold;margin-right: 0.5rem;">标签：</span>
+          <div class="tag">
+            <template v-for="tag in articleDetail.tags" :key="tag.id">
+              <div @click="$router.push(`/tags/${tag.id}`)"># {{ tag.tagName }}</div>
+            </template>
+          </div>
         </div>
         <div class="like">
           <div @click="likeBtn(articleDetail)">
@@ -496,7 +504,8 @@ function ReadingModeFunc() {
           </div>
         </div>
       </div>
-      <div>
+      <div style="display: flex;align-items: center;margin-top: 0.5rem;">
+        <span style="font-weight: bold;margin-right: 0.5rem;">分类：</span>
         <div class="tag" style="display: flex;justify-content: left;">
           <div @click="$router.push(`/category/${articleDetail.categoryId}`)">{{ articleDetail.categoryName }}</div>
         </div>

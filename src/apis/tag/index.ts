@@ -8,19 +8,27 @@ export function tagList() {
 }
 
 // 后台标签列表
-export async function tagBackList() {
+export async function tagBackList(pageNum: number, pageSize: number) {
     return http.request({
         url: '/tag/back/list',
-        method: 'get'
+        method: 'get',
+        params: {
+            pageNum,
+            pageSize
+        }
     });
 }
 
 // 搜索标签
-export async function searchTag(data: any) {
+export async function searchTag(data: any, pageNum: number, pageSize: number) {
     return http.request({
         url: '/tag/back/search',
         method: 'post',
-        data
+        data,
+        params: {
+            pageNum,
+            pageSize
+        }
     });
 }
 

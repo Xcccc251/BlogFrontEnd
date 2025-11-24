@@ -19,7 +19,6 @@ const searchForm = reactive({
 const tableData = ref<any[]>([])
 const loading = ref(false)
 const selectedRows = ref<any[]>([])
-const allTagData = ref<any[]>([]) // 保存所有标签数据用于前端分页
 
 // 分页数据
 const pagination = reactive({
@@ -55,13 +54,9 @@ const registerUpdateQueryResultCallback = inject<((callback: (data: any) => void
 
 // 处理来自 SQL 查询的数据更新
 const handleQueryResultUpdate = (rows: any[]) => {
-  // 保存所有数据
-  allTagData.value = rows
-  // 重置到第一页
+  tableData.value = rows
   pagination.currentPage = 1
   pagination.total = rows.length
-  // 前端分页
-  updateTableData()
   
   console.log('Tag 页面已接收并更新数据，共', rows.length, '条')
 }
@@ -80,14 +75,10 @@ onMounted(() => {
 const refreshData = async () => {
   loading.value = true
   try {
-    const res: any = await tagBackList()
+    const res: any = await tagBackList(pagination.currentPage, pagination.pageSize)
     if (res.code === 200) {
-      // 保存所有数据
-      allTagData.value = res.data
-      // 设置总数
-      pagination.total = res.data.length
-      // 前端分页
-      updateTableData()
+      tableData.value = res.data.page
+      pagination.total = res.data.total
     }
   } catch (error) {
     ElMessage.error('加载标签列表失败')
@@ -96,28 +87,17 @@ const refreshData = async () => {
   }
 }
 
-// 更新表格数据（用于分页）
-const updateTableData = () => {
-  const start = (pagination.currentPage - 1) * pagination.pageSize
-  const end = start + pagination.pageSize
-  tableData.value = allTagData.value.slice(start, end)
-}
-
 // 搜索
 const handleSearch = async () => {
   loading.value = true
   try {
-    const res: any = await searchTag(searchForm)
+    pagination.currentPage = 1
+    const res: any = await searchTag(searchForm, pagination.currentPage, pagination.pageSize)
     if (res.code === 200) {
-      // 保存所有数据
-      allTagData.value = res.data
-      // 重置到第一页
-      pagination.currentPage = 1
-      pagination.total = res.data.length
-      // 前端分页
-      updateTableData()
+      tableData.value = res.data.page
+      pagination.total = res.data.total
       
-      if (res.data.length === 0) {
+      if (res.data.page.length === 0) {
         ElMessage.warning('没有查询到相关标签')
       }
     }
@@ -138,14 +118,14 @@ const handleReset = () => {
 // 分页：页码改变
 const handleCurrentChange = (page: number) => {
   pagination.currentPage = page
-  updateTableData()
+  refreshData()
 }
 
 // 分页：每页大小改变
 const handleSizeChange = (size: number) => {
   pagination.pageSize = size
   pagination.currentPage = 1
-  updateTableData()
+  refreshData()
 }
 
 // 打开新增弹窗

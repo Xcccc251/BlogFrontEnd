@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick } from 'vue'
+import { nextTick, reactive } from 'vue'
 import CustomMarkdownEditor from '@/components/CustomMarkdownEditor/index.vue'
 import { ElMessage } from 'element-plus'
 import { Loading, Check, Close, Delete, Edit, ArrowLeft, ArrowRight, ChatLineSquare } from '@element-plus/icons-vue'
@@ -14,6 +14,7 @@ import {
   publishArticle, 
   uploadCover 
 } from '@/apis/article'
+import { tagBackList, searchTag as searchTagAPI } from '@/apis/tag'
 import { agentAPI } from '@/apis/aiChat'
 import type { CategoryType, TagType } from './type'
 import doneSound from '@/assets/sounds/done1.mp3'
@@ -56,6 +57,17 @@ const categoryList = ref<CategoryType[]>([])
 const tagList = ref<TagType[]>([])
 const categoryName = ref('')
 const tagName = ref('')
+
+// 标签分页
+const tagPagination = reactive({
+  currentPage: 1,
+  pageSize: 15,
+  total: 0,
+  hasMore: true
+})
+const tagSearchKeyword = ref('')
+const tagSelectRef = ref()
+const isLoadingMore = ref(false)
 
 // 加载状态
 const categoryLoading = ref(false)
@@ -200,11 +212,20 @@ const undoTagsChange = () => {
 // 移除编辑器类型切换，只使用自定义编辑器
 
 onMounted(async () => {
-  getFormData()
+  // 先加载分类和标签列表，确保下拉选项准备好
   await getCategory()
   await getTag()
   await loadModels()
-  await loadAgentSessions(true) // 传入true表示自动选择第一个会话
+  
+  // 标签列表加载完成后再加载文章数据，避免显示数字
+  await getFormData()
+  
+  // 如果是编辑文章（URL中有id参数），创建新会话但不清空表单；否则加载并自动选择第一个会话
+  if (route.query.id) {
+    await createNewSession(false) // 传入false，不清空表单数据
+  } else {
+    await loadAgentSessions(true) // 传入true表示自动选择第一个会话
+  }
   
   // 添加点击外部关闭下拉框的事件监听
   document.addEventListener('click', handleClickOutside)
@@ -248,13 +269,118 @@ async function getCategory() {
   }
 }
 
-// 获取标签列表
-async function getTag() {
+// 获取标签列表（初始加载和加载更多）
+async function getTag(loadMore = false) {
   try {
-    const { data } = await articleTag()
-    tagList.value = data
+    tagLoading.value = true
+    const page = loadMore ? tagPagination.currentPage + 1 : 1
+    
+    const res: any = await tagBackList(page, tagPagination.pageSize)
+    
+    if (res.code === 200) {
+      const newTags = res.data.page || []
+      
+      if (loadMore) {
+        // 加载更多：追加到现有列表
+        tagList.value = [...tagList.value, ...newTags]
+        tagPagination.currentPage = page
+      } else {
+        // 初始加载：替换列表
+        tagList.value = newTags
+        tagPagination.currentPage = 1
+      }
+      
+      tagPagination.total = res.data.total
+      tagPagination.hasMore = tagList.value.length < tagPagination.total
+    }
   } catch (error) {
     ElMessage.error('获取标签列表失败')
+  } finally {
+    tagLoading.value = false
+  }
+}
+
+// 搜索标签
+async function handleTagSearch(keyword: string) {
+  tagSearchKeyword.value = keyword
+  
+  if (!keyword.trim()) {
+    // 清空搜索，重新加载第一页
+    await getTag(false)
+    return
+  }
+  
+  try {
+    tagLoading.value = true
+    const res: any = await searchTagAPI({ tagName: keyword }, 1, tagPagination.pageSize)
+    
+    if (res.code === 200) {
+      // 搜索接口返回的data直接是数组，不是分页格式
+      tagList.value = Array.isArray(res.data) ? res.data : []
+      tagPagination.total = tagList.value.length
+      tagPagination.currentPage = 1
+      // 搜索结果不支持分页加载更多
+      tagPagination.hasMore = false
+    }
+  } catch (error) {
+    ElMessage.error('搜索标签失败')
+  } finally {
+    tagLoading.value = false
+  }
+}
+
+// 标签选择器手动加载更多
+async function handleTagLoadMore() {
+  if (isLoadingMore.value || tagLoading.value || !tagPagination.hasMore || tagSearchKeyword.value) {
+    return
+  }
+  
+  isLoadingMore.value = true
+  try {
+    await getTag(true)
+  } finally {
+    isLoadingMore.value = false
+  }
+}
+
+// 生成带"加载更多"选项的标签列表
+const tagOptions = computed(() => {
+  const options = tagList.value.map((item: any) => ({
+    label: item.tagName,
+    value: item.id
+  }))
+  
+  // 如果还有更多数据且不在搜索状态，添加"加载更多"选项
+  if (tagPagination.hasMore && !tagSearchKeyword.value) {
+    options.push({
+      label: isLoadingMore.value ? '正在加载...' : '⬇️ 加载更多标签',
+      value: -1, // 特殊值，表示这是"加载更多"选项
+      disabled: isLoadingMore.value
+    })
+  }
+  
+  return options
+})
+
+// 处理标签变化（过滤掉"加载更多"选项的点击）
+const handleTagChange = (values: number[]) => {
+  // 如果选中了"加载更多"选项（value为-1）
+  if (values.includes(-1)) {
+    // 移除-1，触发加载更多
+    formData.value.tagId = (values as number[]).filter(v => v !== -1)
+    handleTagLoadMore()
+  } else {
+    formData.value.tagId = values
+  }
+}
+
+// 处理下拉框可见性变化
+const handleTagVisibleChange = (visible: boolean) => {
+  if (!visible) {
+    // 下拉框关闭时，如果没有搜索关键词，重置列表
+    if (!tagSearchKeyword.value) {
+      getTag(false)
+    }
   }
 }
 
@@ -299,10 +425,11 @@ function addTagFunc() {
     id: tagList.value.length > 0 ? tagList.value[tagList.value.length - 1].id + 1 : 1 
   }
   
-  addTag(data).then((res: any) => {
+  addTag(data).then(async (res: any) => {
     if (res.code === 200) {
-      tagList.value.push(data)
       ElMessage.success('添加标签成功')
+      // 重新加载标签列表
+      await getTag(false)
     } else {
       ElMessage.error('添加标签失败')
     }
@@ -480,15 +607,48 @@ const doAutoSave = async () => {
 // 移除md-editor的图片上传函数，使用自定义编辑器的上传功能
 
 // 数据回显
-function getFormData() {
+async function getFormData() {
   if (route.query.id) {
-    getArticle(route.query.id as string).then((res: any) => {
+    try {
+      const res: any = await getArticle(route.query.id as string)
       if (res.data) {
-        formData.value = res.data
+        // 先赋值基础数据
+        const articleData = res.data
+        
+        // 处理tagId：确保转换为数字数组
+        if (articleData.tagId) {
+          if (Array.isArray(articleData.tagId)) {
+            // 如果是数组，确保每个元素都是数字
+            articleData.tagId = articleData.tagId.map((id: any) => {
+              return typeof id === 'number' ? id : parseInt(id, 10)
+            }).filter((id: number) => !isNaN(id))
+            
+            // 检查是否有标签不在当前tagList中
+            const missingTagIds = articleData.tagId.filter((id: number) => 
+              !tagList.value.some((tag: any) => tag.id === id)
+            )
+            
+            // 如果有缺失的标签，尝试加载更多标签
+            if (missingTagIds.length > 0 && tagPagination.hasMore) {
+              // 加载所有标签，确保能显示文章的所有标签
+              while (tagPagination.hasMore) {
+                await getTag(true) // 加载更多
+                // 检查是否所有标签都已加载
+                const stillMissing = missingTagIds.filter((id: number) => 
+                  !tagList.value.some((tag: any) => tag.id === id)
+                )
+                if (stillMissing.length === 0) break
+              }
+            }
+          }
+        }
+        
+        // 赋值到formData
+        formData.value = articleData
       }
-    }).catch(() => {
+    } catch (error) {
       ElMessage.error('获取文章数据失败')
-    })
+    }
   }
 }
 
@@ -499,7 +659,7 @@ function close() {
 
 // AI对话相关方法
 // 创建新会话
-const createNewSession = async () => {
+const createNewSession = async (clearForm = true) => {
   try {
     const res: any = await agentAPI.createAgentSession()
     const data = (res && res.data) ? res.data : res
@@ -507,9 +667,12 @@ const createNewSession = async () => {
     const sessionId = (data && data.session && data.session.id) || data?.session_id || data?.id
     if (sessionId) {
       currentSessionId.value = sessionId
-      // 清空当前消息和表单
+      // 清空当前消息
       aiMessages.value = []
-      resetForm()
+      // 只在需要时清空表单（编辑模式下不清空）
+      if (clearForm) {
+        resetForm()
+      }
       await loadAgentSessions() // 不传入autoSelectFirst参数，保持当前会话选中
       ElMessage.success('已创建新会话')
       return sessionId
@@ -1773,14 +1936,14 @@ const stopDrag = () => {
               <span>已保存 {{ lastSavedText }}</span>
             </template>
           </div>
-          <el-button @click="generateTestDiff" type="success">测试Diff</el-button>
+          <!-- <el-button @click="generateTestDiff" type="success">测试Diff</el-button>
           <el-button @click="testBatchUpdate" type="warning">测试批量更新</el-button>
           <el-button @click="() => {
             // 便捷测试：模拟 update_title 提案
             prevTitle = formData.articleTitle
             proposedTitle = (formData.articleTitle || '示例标题') + '（AI建议）'
             showTitleConfirm = true
-          }">测试标题</el-button>
+          }">测试标题</el-button> -->
           <el-button @click="close">关闭</el-button>
           <el-button type="primary" @click="onFinish">发布</el-button>
         </div>
@@ -1839,20 +2002,20 @@ const stopDrag = () => {
             </el-form-item>
             
             <el-form-item label="标签">
-              <el-select 
+              <el-select-v2 
+                ref="tagSelectRef"
                 v-model="formData.tagId" 
                 placeholder="选择标签" 
-                style="width: 150px"
+                style="width: 200px"
                 multiple
+                filterable
+                remote
+                :remote-method="handleTagSearch"
                 :loading="tagLoading"
-              >
-                <el-option
-                  v-for="item in tagList"
-                  :key="item.id"
-                  :label="item.tagName"
-                  :value="item.id"
-                />
-              </el-select>
+                :options="tagOptions"
+                @change="handleTagChange"
+                @visible-change="handleTagVisibleChange"
+              />
               <template v-if="showTagsConfirm">
                 <div style="display: inline-flex; gap: 8px; align-items: center; margin-left: 10px;">
                   <el-tag v-for="n in (proposedTags || [])" :key="n" type="info" effect="light">{{ n }}</el-tag>

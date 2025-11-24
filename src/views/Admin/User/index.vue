@@ -77,10 +77,10 @@ onMounted(async () => {
 const refreshData = async () => {
   loading.value = true
   try {
-    const res: any = await userList()
+    const res: any = await userList(pagination.currentPage, pagination.pageSize)
     if (res.code === 200) {
-      tableData.value = res.data || []
-      pagination.total = tableData.value.length
+      tableData.value = res.data.page || []
+      pagination.total = res.data.total
     }
   } catch (error) {
     ElMessage.error('加载用户列表失败')
@@ -92,11 +92,12 @@ const refreshData = async () => {
 const handleSearch = async () => {
   loading.value = true
   try {
-    const res: any = await userSearch(formData)
+    pagination.currentPage = 1
+    const res: any = await userSearch(formData, pagination.currentPage, pagination.pageSize)
     if (res.code === 200) {
-      tableData.value = res.data || []
-      pagination.total = tableData.value.length
-      if (res.data.length === 0) {
+      tableData.value = res.data.page || []
+      pagination.total = res.data.total
+      if (res.data.page.length === 0) {
         ElMessage.warning('没有查询到相关用户')
       }
     }
@@ -181,6 +182,19 @@ const handleViewDetail = async (row: UserItem) => {
   } catch (error) {
     ElMessage.error('获取用户详情失败')
   }
+}
+
+// 分页：页码改变
+const handleCurrentChange = (page: number) => {
+  pagination.currentPage = page
+  refreshData()
+}
+
+// 分页：每页大小改变
+const handleSizeChange = (size: number) => {
+  pagination.pageSize = size
+  pagination.currentPage = 1
+  refreshData()
 }
 </script>
 
@@ -308,8 +322,8 @@ const handleViewDetail = async (row: UserItem) => {
           :total="pagination.total"
           :background="true"
           layout="total, sizes, prev, pager, next, jumper"
-          @size-change="refreshData"
-          @current-change="refreshData"
+          @size-change="handleSizeChange"
+          @current-change="handleCurrentChange"
         />
       </div>
     </el-card>
