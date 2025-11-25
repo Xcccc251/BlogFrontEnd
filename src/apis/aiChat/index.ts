@@ -1,38 +1,46 @@
-import axios from 'axios'
-
-// 创建axios实例
-const api = axios.create({
-  baseURL: '/api',
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-})
+import http from '@/utils/http'
+import { GET_TOKEN } from '@/utils/auth'
+import { Jwt_Prefix } from '@/const/Jwt'
 
 // 会话管理API
 export const sessionAPI = {
   // 获取所有会话
   getSessions() {
-    return api.get('/sessions')
+    return http.request({
+      url: '/sessions',
+      method: 'get'
+    })
   },
   
   // 创建新会话
   createSession() {
-    return api.post('/sessions')
+    return http.request({
+      url: '/sessions',
+      method: 'post'
+    })
   },
   
   // 加载指定会话
   loadSession(sessionId: string) {
-    return api.get(`/sessions/${sessionId}`)
+    return http.request({
+      url: `/sessions/${sessionId}`,
+      method: 'get'
+    })
   },
   
   // 删除会话
   deleteSession(sessionId: string) {
-    return api.delete(`/sessions/${sessionId}`)
+    return http.request({
+      url: `/sessions/${sessionId}`,
+      method: 'delete'
+    })
   },
 
   getModels() {
-    return api.get('/models')
+    return http.request({
+      url: '/models',
+      method: 'get'
+    })
   },
 }
 
@@ -40,11 +48,18 @@ export const sessionAPI = {
 export const chatAPI = {
   // 发送消息（流式响应）
   sendMessage(message: string, sessionId: string | null, model: string) {
+    const token = GET_TOKEN()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Client-Type': 'Frontend'
+    }
+    if (token) {
+      headers['Authorization'] = Jwt_Prefix + token
+    }
+    
     return fetch('/api/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({
         message,
         session_id: sessionId,
@@ -57,11 +72,18 @@ export const chatAPI = {
 export const agentAPI = {
   // 发送消息（流式响应）
   sendMessage(articleInfo:string, userMessage: string, articleContent: string, sessionId: string | null, type: string, model: string) {
+    const token = GET_TOKEN()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Client-Type': 'Frontend'
+    }
+    if (token) {
+      headers['Authorization'] = Jwt_Prefix + token
+    }
+    
     return fetch('/api/agent/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({
         article_info:articleInfo,
         article_content: articleContent,
@@ -74,42 +96,64 @@ export const agentAPI = {
   },  
   
   createAgentSession() {
-    return api.post('/agent/sessions')
+    return http.request({
+      url: '/agent/sessions',
+      method: 'post'
+    })
   },
 
   // 获取所有会话
   getAgentSessions() {
-    return api.get('/agent/sessions')
+    return http.request({
+      url: '/agent/sessions',
+      method: 'get'
+    })
   },
     
     // 加载指定会话
   loadAgentSession(sessionId: string) {
-    return api.get(`/agent/sessions/${sessionId}`)
+    return http.request({
+      url: `/agent/sessions/${sessionId}`,
+      method: 'get'
+    })
   },
     
     // 删除会话
   deleteAgentSession(sessionId: string) {
-    return api.delete(`/agent/sessions/${sessionId}`)
+    return http.request({
+      url: `/agent/sessions/${sessionId}`,
+      method: 'delete'
+    })
   },
 
   getArticle(articleId: string) {
-    return api.get(`/agent/article/${articleId}`)
+    return http.request({
+      url: `/agent/article/${articleId}`,
+      method: 'get'
+    })
   },
 
   saveArticle(sessionId: string, articleContent: string, articleTitle: string, articleCover: string, articleCategory: string, articleTagArray: string[]) {
-    return api.post(`/agent/save/article`, {
-      session_id: sessionId,
-      article_content: articleContent,
-      article_title: articleTitle,
-      article_cover: articleCover,
-      article_category: articleCategory,
-      article_tags: JSON.stringify(articleTagArray)
+    return http.request({
+      url: '/agent/save/article',
+      method: 'post',
+      data: {
+        session_id: sessionId,
+        article_content: articleContent,
+        article_title: articleTitle,
+        article_cover: articleCover,
+        article_category: articleCategory,
+        article_tags: JSON.stringify(articleTagArray)
+      }
     })
   },
 
   // 获取可用模型列表
   getModels() {
-    return api.get('/agent/models')
+    return http.request({
+      url: '/agent/models',
+      method: 'get'
+    })
   },
 }
 
@@ -117,11 +161,18 @@ export const agentAPI = {
 export const backendAgentAPI = {
   // 发送消息（流式响应）- 用于admin页面的SQL查询助手
   sendMessage(userMessage: string, sessionId: string | null, model: string, level: number, currentPage: string) {
+    const token = GET_TOKEN()
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Client-Type': 'Frontend'
+    }
+    if (token) {
+      headers['Authorization'] = Jwt_Prefix + token
+    }
+    
     return fetch('/api/backend/agent/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers,
       body: JSON.stringify({
         user_message: userMessage,
         session_id: sessionId,
@@ -134,34 +185,53 @@ export const backendAgentAPI = {
   
   // 创建新会话
   createSession() {
-    return api.post('/backend/agent/sessions')
+    return http.request({
+      url: '/backend/agent/sessions',
+      method: 'post'
+    })
   },
 
   // 获取所有会话
   getSessions() {
-    return api.get('/backend/agent/sessions')
+    return http.request({
+      url: '/backend/agent/sessions',
+      method: 'get'
+    })
   },
     
   // 加载指定会话
   loadSession(sessionId: string) {
-    return api.get(`/backend/agent/sessions/${sessionId}`)
+    return http.request({
+      url: `/backend/agent/sessions/${sessionId}`,
+      method: 'get'
+    })
   },
     
   // 删除会话
   deleteSession(sessionId: string) {
-    return api.delete(`/backend/agent/sessions/${sessionId}`)
+    return http.request({
+      url: `/backend/agent/sessions/${sessionId}`,
+      method: 'delete'
+    })
   },
 
   // 获取可用模型列表（共享agent模型列表）
   getModels() {
-    return api.get('/agent/models')
+    return http.request({
+      url: '/agent/models',
+      method: 'get'
+    })
   },
 
   // SQL 确认
   confirmSql(data: { session_id: string; confirm_id: string; confirmed: boolean }) {
-    return api.post('/backend/agent/confirm-sql', data)
+    return http.request({
+      url: '/backend/agent/confirm-sql',
+      method: 'post',
+      data
+    })
   },
 }
 
 
-export default api
+export default http

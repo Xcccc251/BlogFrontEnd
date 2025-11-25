@@ -203,7 +203,7 @@
                     />
                   </div>
                   <div class="article-info">
-                    <h5 class="article-title">{{ article.title }}</h5>
+                    <h5 class="article-title">{{ truncateTitle(article.title) }}</h5>
                     <div class="article-meta">
                       <span class="article-category">{{ article.category }}</span>
                       <span class="article-id">ID: {{ article.id }}</span>
@@ -318,6 +318,9 @@ import { ref, computed, onMounted, nextTick, watch, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Delete, Edit, Promotion, ArrowLeft, ArrowRight, Check, Loading, ChatLineSquare } from '@element-plus/icons-vue'
 import { sessionAPI, chatAPI } from '@/apis/aiChat'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 // 类型定义
 interface ChatSession {
@@ -420,10 +423,16 @@ const loadSessions = async () => {
   try {
     loading.value = true
     const response = await sessionAPI.getSessions()
-    if (response.data.success) {
-      sessions.value = response.data.sessions
+    // 检查是否未登录
+    if (response.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
+    if (response.success) {
+      sessions.value = response.sessions
     } else {
-      ElMessage.error('加载会话失败: ' + response.data.error)
+      ElMessage.error('加载会话失败: ' + response.error)
     }
   } catch (error: any) {
     ElMessage.error('网络错误: ' + (error.message || error))
@@ -436,14 +445,20 @@ const loadSessions = async () => {
 const loadModels = async () => {
   try {
     const response = await sessionAPI.getModels()
-    if (response.data.success) {
-      availableModels.value = response.data.models
+    // 检查是否未登录
+    if (response.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
+    if (response.success) {
+      availableModels.value = response.models
       // 如果当前选择的模型不在列表中，选择第一个
       if (!availableModels.value.some(m => m.model === selectedModel.value)) {
         selectedModel.value = availableModels.value[0]?.model || 'gemini_flash'
       }
     } else {
-      ElMessage.error('加载模型失败: ' + response.data.error)
+      ElMessage.error('加载模型失败: ' + response.error)
     }
   } catch (error: any) {
     ElMessage.error('网络错误: ' + (error.message || error))
@@ -455,13 +470,19 @@ const createNewSession = async () => {
   try {
     loading.value = true
     const response = await sessionAPI.createSession()
-    if (response.data.success) {
-      currentSessionId.value = response.data.session.id
-      currentSessionName.value = response.data.session.name
+    // 检查是否未登录
+    if (response.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
+    if (response.success) {
+      currentSessionId.value = response.session.id
+      currentSessionName.value = response.session.name
       messages.value = []
       loadSessions() // 重新加载会话列表
     } else {
-      ElMessage.error('创建会话失败: ' + response.data.error)
+      ElMessage.error('创建会话失败: ' + response.error)
     }
   } catch (error: any) {
     ElMessage.error('网络错误: ' + (error.message || error))
@@ -475,13 +496,19 @@ const loadSession = async (sessionId: string) => {
   try {
     loading.value = true
     const response = await sessionAPI.loadSession(sessionId)
-    if (response.data.success) {
-      currentSessionId.value = response.data.session.id
-      currentSessionName.value = response.data.session.name
-      renderChatHistory(response.data.session.history)
+    // 检查是否未登录
+    if (response.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
+    if (response.success) {
+      currentSessionId.value = response.session.id
+      currentSessionName.value = response.session.name
+      renderChatHistory(response.session.history)
       loadSessions() // 重新加载会话列表以更新选中状态
     } else {
-      ElMessage.error('加载会话失败: ' + response.data.error)
+      ElMessage.error('加载会话失败: ' + response.error)
     }
   } catch (error: any) {
     ElMessage.error('网络错误: ' + (error.message || error))
@@ -495,7 +522,13 @@ const deleteSession = async (sessionId: string) => {
   try {
     loading.value = true
     const response = await sessionAPI.deleteSession(sessionId)
-    if (response.data.success) {
+    // 检查是否未登录
+    if (response.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
+    if (response.success) {
       if (currentSessionId.value === sessionId) {
         currentSessionId.value = null
         currentSessionName.value = '新对话'
@@ -504,7 +537,7 @@ const deleteSession = async (sessionId: string) => {
       loadSessions() // 重新加载会话列表
       ElMessage.success('删除成功')
     } else {
-      ElMessage.error('删除会话失败: ' + response.data.error)
+      ElMessage.error('删除会话失败: ' + response.error)
     }
   } catch (error: any) {
     ElMessage.error('网络错误: ' + (error.message || error))
@@ -622,6 +655,12 @@ const sendStreamMessage = async (message: string) => {
   const response = await chatAPI.sendMessage(message, currentSessionId.value, selectedModel.value)
   
   if (!response.ok) {
+    // 检查是否是401未授权错误
+    if (response.status === 401) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
     throw new Error('HTTP ' + response.status)
   }
   
@@ -652,6 +691,13 @@ const sendStreamMessage = async (message: string) => {
           
           try {
             const parsed = JSON.parse(data)
+            
+            // 检查是否未登录
+            if (parsed.code === 1002) {
+              ElMessage.warning('请先登录')
+              router.push('/login')
+              return
+            }
             
             // 更新会话ID
             if (parsed.session_id) {
@@ -830,6 +876,12 @@ const sendStreamMessage = async (message: string) => {
           
           try {
             const parsed = JSON.parse(data)
+            // 检查是否未登录
+            if (parsed.code === 1002) {
+              ElMessage.warning('请先登录')
+              router.push('/login')
+              return
+            }
             if (parsed.session_id) {
               currentSessionId.value = parsed.session_id
             }
@@ -1255,6 +1307,15 @@ const toggleThinkingCollapse = (index: number) => {
   if (messages.value[index]) {
     messages.value[index].collapsed = !messages.value[index].collapsed
   }
+}
+
+// 截断标题，超过10个字则截断并添加...
+const truncateTitle = (title: string): string => {
+  if (!title) return ''
+  if (title.length > 10) {
+    return title.substring(0, 10) + '...'
+  }
+  return title
 }
 </script>
 
