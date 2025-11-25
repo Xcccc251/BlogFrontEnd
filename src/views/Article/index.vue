@@ -383,13 +383,13 @@ function ReadingModeFunc() {
         </div>
       </template>
       <template #information>
-        <CardInfo/>
-        <Card title="公告" prefixIcon="announcement" suffix-icon="jt_y" :isDithering="true" :isArrow="true"
+        <!-- <CardInfo/> -->
+        <!-- <Card title="公告" prefixIcon="announcement" suffix-icon="jt_y" :isDithering="true" :isArrow="true"
               @invoke="announcement">
         <pre class="pre-text">
 {{ websiteStore.webInfo?.sidebarAnnouncement }}
         </pre>
-        </Card>
+        </Card> -->
         <ElectronicClocks/>
         <div class="sticky_layout">
           <div class="mt-[2.5em]">

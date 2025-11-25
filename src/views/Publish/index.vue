@@ -587,7 +587,7 @@ const doAutoSave = async () => {
   try {
     isSaving.value = true
     autoSaveError.value = null
-    await agentAPI.saveArticle(
+    const res = await agentAPI.saveArticle(
       articleId,
       formData.value.articleContent || '',
       formData.value.articleTitle || '',
@@ -595,6 +595,12 @@ const doAutoSave = async () => {
       categoryName,
       tagNames
     )
+    // 检查是否未登录
+    if (res.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
     lastSavedSnapshot.value = snapshot
     lastSavedAt.value = new Date()
   } catch (err: any) {
@@ -662,9 +668,14 @@ function close() {
 const createNewSession = async (clearForm = true) => {
   try {
     const res: any = await agentAPI.createAgentSession()
-    const data = (res && res.data) ? res.data : res
+    // 检查是否未登录
+    if (res.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return null
+    }
     // 兼容多种返回结构: { success, session: { id } } 或 { session_id } 或 { id }
-    const sessionId = (data && data.session && data.session.id) || data?.session_id || data?.id
+    const sessionId = (res && res.session && res.session.id) || res?.session_id || res?.id
     if (sessionId) {
       currentSessionId.value = sessionId
       // 清空当前消息
@@ -689,14 +700,20 @@ const createNewSession = async (clearForm = true) => {
 const loadModels = async () => {
   try {
     const response = await agentAPI.getModels()
-    if (response.data.success) {
-      availableModels.value = response.data.models
+    // 检查是否未登录
+    if (response.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
+    if (response.success) {
+      availableModels.value = response.models
       // 如果当前选择的模型不在列表中，选择第一个
       if (!availableModels.value.some((m: any) => m.model === selectedModel.value)) {
         selectedModel.value = availableModels.value[0]?.model || 'gemini_flash'
       }
     } else {
-      ElMessage.error('加载模型失败: ' + response.data.error)
+      ElMessage.error('加载模型失败: ' + response.error)
     }
   } catch (error: any) {
     ElMessage.error('网络错误: ' + (error.message || error))
@@ -708,9 +725,14 @@ const loadAgentSessions = async (autoSelectFirst = false) => {
   try {
     sessionsLoading.value = true
     const res: any = await agentAPI.getAgentSessions()
-    const data = (res && res.data) ? res.data : res
+    // 检查是否未登录
+    if (res.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
     // 兼容 { sessions: [...] } 或直接数组
-    agentSessions.value = Array.isArray(data) ? data : (data?.sessions || [])
+    agentSessions.value = Array.isArray(res) ? res : (res?.sessions || [])
     
     // 如果需要自动选择第一个会话且没有当前选中的会话
     if (autoSelectFirst && agentSessions.value.length > 0 && !currentSessionId.value) {
@@ -731,18 +753,23 @@ const selectAgentSession = async (sessionId: string) => {
   try {
     // 加载会话的历史消息
     const res: any = await agentAPI.loadAgentSession(sessionId)
-    const data = (res && res.data) ? res.data : res
+    // 检查是否未登录
+    if (res.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
     
     // 清空当前消息
     aiMessages.value = []
     
     // 如果有历史消息，加载到界面
-    if (data && data.session && data.session.history && Array.isArray(data.session.history)) {
+    if (res && res.session && res.session.history && Array.isArray(res.session.history)) {
       // 处理历史消息，包含tool消息
       const processedMessages: any[] = []
       
-      for (let i = 0; i < data.session.history.length; i++) {
-        const msg = data.session.history[i]
+      for (let i = 0; i < res.session.history.length; i++) {
+        const msg = res.session.history[i]
         
         if (msg.role === 'user') {
           // 用户消息直接添加
@@ -840,17 +867,17 @@ const selectAgentSession = async (sessionId: string) => {
     }
     
     // 处理文章内容（现在loadAgentSession直接返回文章信息）
-    if (data && data.success) {
+    if (res && res.success) {
       // 填充文章信息到表单
-      formData.value.articleTitle = data.article_title !== undefined ? data.article_title : formData.value.articleTitle
-      formData.value.articleContent = data.article_content !== undefined ? data.article_content : formData.value.articleContent
-      formData.value.articleCover = data.article_cover !== undefined ? data.article_cover : formData.value.articleCover
+      formData.value.articleTitle = res.article_title !== undefined ? res.article_title : formData.value.articleTitle
+      formData.value.articleContent = res.article_content !== undefined ? res.article_content : formData.value.articleContent
+      formData.value.articleCover = res.article_cover !== undefined ? res.article_cover : formData.value.articleCover
       
       // 处理分类
-      if (data.article_category !== undefined) {
-        if (data.article_category) {
+      if (res.article_category !== undefined) {
+        if (res.article_category) {
           const category = categoryList.value.find((c: any) => 
-            c.categoryName === data.article_category
+            c.categoryName === res.article_category
           )
           if (category) {
             formData.value.categoryId = category.id
@@ -862,10 +889,10 @@ const selectAgentSession = async (sessionId: string) => {
       }
       
       // 处理标签 - 解析JSON格式的标签数组
-      if (data.article_tags !== undefined) {
-        if (data.article_tags) {
+      if (res.article_tags !== undefined) {
+        if (res.article_tags) {
           try {
-            const tagsArray = JSON.parse(data.article_tags)
+            const tagsArray = JSON.parse(res.article_tags)
             if (Array.isArray(tagsArray)) {
               const tagIds = tagsArray.map((tagName: string) => {
                 const tag = tagList.value.find((t: any) => t.tagName === tagName)
@@ -904,7 +931,13 @@ const confirmDeleteSession = async () => {
   if (!deleteSessionId.value) return
   
   try {
-    await agentAPI.deleteAgentSession(deleteSessionId.value)
+    const res = await agentAPI.deleteAgentSession(deleteSessionId.value)
+    // 检查是否未登录
+    if (res.code === 1002) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
     if (currentSessionId.value === deleteSessionId.value) {
       currentSessionId.value = null
       aiMessages.value = []
@@ -1021,6 +1054,12 @@ const sendAiStreamMessage = async (message: string) => {
   const response = await agentAPI.sendMessage(articleInfo, message, currentContent, currentSessionId.value, aiMode.value, selectedModel.value)
   
   if (!response.ok) {
+    // 检查是否是401未授权错误
+    if (response.status === 401) {
+      ElMessage.warning('请先登录')
+      router.push('/login')
+      return
+    }
     throw new Error('HTTP ' + response.status)
   }
   
@@ -1051,6 +1090,13 @@ const sendAiStreamMessage = async (message: string) => {
           
           try {
             const parsed = JSON.parse(data)
+            
+            // 检查是否未登录
+            if (parsed.code === 1002) {
+              ElMessage.warning('请先登录')
+              router.push('/login')
+              return
+            }
             
             // 更新会话ID
             if (parsed.session_id) {

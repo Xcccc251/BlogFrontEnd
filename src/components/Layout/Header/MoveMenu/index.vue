@@ -10,12 +10,34 @@ import {
   Link,
   Postcard, PriceTag, UserFilled, ChatLineSquare, Edit, Setting
 } from "@element-plus/icons-vue";
+import { computed } from 'vue'
+import useUserStore from '@/store/modules/user'
 
 const emit = defineEmits(["update:closeDrawer"])
+const userStore = useUserStore()
 
 function isClose(){
   emit("update:closeDrawer")
 }
+
+// 判断用户是否有管理权限
+const hasAdminPermission = computed(() => {
+  if (!userStore.userInfo) return false
+  
+  // 检查角色中是否包含管理员角色
+  const hasAdminRole = userStore.userInfo.roles?.some(role => 
+    role.toLowerCase().includes('admin') || 
+    role === '管理员'
+  )
+  
+  // 检查权限中是否有管理相关权限
+  const hasAdminPerm = userStore.userInfo.permissions?.some(perm => 
+    perm.toLowerCase().includes('admin') || 
+    perm.toLowerCase().includes('manage')
+  )
+  
+  return hasAdminRole || hasAdminPerm
+})
 
 // 是否显示音乐模块
 const env = import.meta.env
@@ -105,7 +127,7 @@ const env = import.meta.env
       </el-icon>
       发布
     </el-menu-item>
-    <el-menu-item index="/admin" @click="isClose">
+    <el-menu-item index="/admin" @click="isClose" v-if="hasAdminPermission">
       <el-icon>
         <Setting/>
       </el-icon>
